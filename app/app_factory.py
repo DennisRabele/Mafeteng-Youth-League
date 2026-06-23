@@ -28,11 +28,12 @@ def create_app(app_mode: str = "combined") -> FastAPI:
 
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    upload_dir = settings.upload_dir
-    if not upload_dir.is_absolute():
-        upload_dir = BASE_DIR / upload_dir
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
+    if not _using_supabase_storage():
+        upload_dir = settings.upload_dir
+        if not upload_dir.is_absolute():
+            upload_dir = BASE_DIR / upload_dir
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
     @app.middleware("http")
     async def app_mode_guard(request: Request, call_next):
@@ -53,3 +54,7 @@ def create_app(app_mode: str = "combined") -> FastAPI:
 
     app.include_router(web_router)
     return app
+
+
+def _using_supabase_storage() -> bool:
+    return bool(settings.supabase_url and settings.supabase_service_role_key)
