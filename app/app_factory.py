@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -12,7 +13,8 @@ from app.web.routes import router as web_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    if _should_init_db():
+        init_db()
     yield
 
 
@@ -58,3 +60,13 @@ def create_app(app_mode: str = "combined") -> FastAPI:
 
 def _using_supabase_storage() -> bool:
     return bool(settings.supabase_url and settings.supabase_service_role_key)
+
+
+def _should_init_db() -> bool:
+    if _is_vercel_deployment():
+        return os.getenv("RUN_DB_INIT", "").strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("RUN_DB_INIT", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_vercel_deployment() -> bool:
+    return bool(os.getenv("VERCEL") or os.getenv("VERCEL_ENV") or os.getenv("VERCEL_URL"))

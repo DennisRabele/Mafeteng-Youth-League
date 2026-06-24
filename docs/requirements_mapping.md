@@ -99,8 +99,8 @@ Access rules:
 
 Shared visual assets:
 
-- `AppAsset` stores public URLs for reusable assets such as `league_logo` and `home_hero_photo`.
-- Local defaults point to `/static/images/logo.jpg` and `/static/images/home.jpg`.
-- Hosted deployments can update these rows to Supabase Storage public URLs without changing templates.
+- `AppAsset` stores the public URL for the reusable `league_logo` asset.
+- The local default points to `/static/images/logo.jpg`.
+- Hosted deployments can update that row to a Supabase Storage public URL without changing templates.
 
 Fixture and result flows are modeled in the database for later sprints, but their full UI workflows are intentionally left out of Sprint 1.

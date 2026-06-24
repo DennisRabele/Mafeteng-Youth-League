@@ -160,11 +160,6 @@ def _seed_app_assets(db: Session) -> None:
             "Main league logo used in the header and loading screen.",
             {"/static/images/logo.png"},
         ),
-        "home_hero_photo": (
-            "/static/images/home.jpg",
-            "Home page football player hero photo.",
-            {"/static/images/home-hero.png", "/static/images/home-hero.jpg"},
-        ),
     }
     existing = {
         asset.asset_key: asset

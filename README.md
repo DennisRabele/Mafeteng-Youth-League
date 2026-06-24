@@ -17,9 +17,8 @@ FastAPI web app for the Youth Development League. The first sprint focuses on re
 - Main stylesheet: `app/static/css/styles.css`
 - Dashboard/loading behavior: `app/static/js/dashboard.js`
 - Logo file location: `app/static/images/logo.jpg`
-- Home page player photo location: `app/static/images/home.jpg`
 
-The app stores public asset URLs in the `app_assets` database table. Local defaults are `/static/images/logo.jpg` and `/static/images/home.jpg`; when hosting with Supabase Storage, update those rows to the Supabase public URLs.
+The app stores the public logo URL in the `app_assets` database table. Local default is `/static/images/logo.jpg`; when hosting with Supabase Storage, update that row to the Supabase public URL.
 
 Generated IDs:
 

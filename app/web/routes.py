@@ -8,10 +8,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import BASE_DIR, settings
 from app.core.security import sign_session, unsign_session, verify_password
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.models import (
     ApprovalStatus,
-    AppAsset,
     Category,
     Player,
     PlayerRegistrationRequest,
@@ -83,23 +82,12 @@ def _render(request: Request, template: str, context: dict):
 
 
 def _load_assets() -> dict[str, str]:
-    defaults = {
+    return {
         "league_logo": "/static/images/logo.jpg",
-        "home_hero_photo": "/static/images/home.jpg",
     }
-    try:
-        from app.db.session import SessionLocal
-
-        with SessionLocal() as db:
-            rows = db.scalars(select(AppAsset)).all()
-            for row in rows:
-                defaults[row.asset_key] = row.url
-    except Exception:
-        return defaults
-    return defaults
 
 
-def _current_user(request: Request, db: Session) -> User | None:
+def _current_user(request: Request, db: Session | None = None) -> User | None:
     token = request.cookies.get(settings.session_cookie_name)
     if not token:
         return None
@@ -109,7 +97,22 @@ def _current_user(request: Request, db: Session) -> User | None:
     user_id = payload.get("sub")
     if not isinstance(user_id, int):
         return None
-    return db.get(User, user_id)
+    try:
+        if db is not None:
+            return db.get(User, user_id)
+        with SessionLocal() as session:
+            return session.get(User, user_id)
+    except Exception:
+        return None
+
+
+def _safe_upload(upload: UploadFile | None, folder: str) -> str | None:
+    try:
+        return save_upload(upload, folder)
+    except Exception as exc:
+        raise RegistrationError(
+            "A file upload could not be completed right now. Please try again."
+        ) from exc
 
 
 def _redirect(location: str) -> RedirectResponse:
@@ -205,7 +208,10 @@ def _challenge_user(request: Request, db: Session, cookie_name: str, purpose: st
     user_id = payload.get("sub")
     if not isinstance(user_id, int):
         return None
-    return db.get(User, user_id)
+    try:
+        return db.get(User, user_id)
+    except Exception:
+        return None
 
 
 def _require_user(request: Request, db: Session) -> User:
@@ -279,8 +285,8 @@ def _require_team_admin_account(request: Request, db: Session) -> TeamAdmin:
 
 
 @router.get("/")
-def home(request: Request, db: Session = Depends(get_db)):
-    user = _current_user(request, db)
+def home(request: Request):
+    user = _current_user(request)
     app_mode = getattr(request.app.state, "app_mode", "combined")
     if user and user.role == UserRole.SUPER_ADMIN.value:
         return _redirect("/super-admin")
@@ -295,12 +301,11 @@ def home(request: Request, db: Session = Depends(get_db)):
 def login_form(
     request: Request,
     error: str | None = None,
-    db: Session = Depends(get_db),
 ):
     return _render(
         request,
         "login.html",
-        {"current_user": _current_user(request, db), "error": error},
+        {"current_user": _current_user(request), "error": error},
     )
 
 
@@ -311,7 +316,19 @@ def login(
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = db.scalar(select(User).where(User.email == email.strip().lower()))
+    try:
+        user = db.scalar(
+            select(User)
+            .options(selectinload(User.team_admin_profile), selectinload(User.super_admin_profile))
+            .where(User.email == email.strip().lower())
+        )
+    except Exception:
+        db.rollback()
+        return _render(
+            request,
+            "login.html",
+            {"error": "Login could not be completed right now. Please try again."},
+        )
     if not user or not verify_password(password, user.password_hash):
         return _render(request, "login.html", {"error": "Invalid email or password."})
 
@@ -330,11 +347,18 @@ def login(
         )
 
     if not user.email_verified:
-        verification_code = issue_email_verification_code(db, user)
         try:
+            verification_code = issue_email_verification_code(db, user)
             send_verification_code(to_email=user.email, code=verification_code)
         except EmailDeliveryError as exc:
             return _render(request, "login.html", {"error": "Verification code was not sent. Please try again."})
+        except Exception:
+            db.rollback()
+            return _render(
+                request,
+                "login.html",
+                {"error": "Verification could not be completed right now. Please try again."},
+            )
         return _render_code_screen(
             request,
             purpose="email_verification",
@@ -351,11 +375,18 @@ def login(
                 {"error": "Your Team Admin registration is still pending approval."},
             )
 
-    login_code = issue_login_code(db, user)
     try:
+        login_code = issue_login_code(db, user)
         send_login_code(to_email=user.email, code=login_code)
     except EmailDeliveryError:
         return _render(request, "login.html", {"error": "Login code was not sent. Please try again."})
+    except Exception:
+        db.rollback()
+        return _render(
+            request,
+            "login.html",
+            {"error": "Login could not be completed right now. Please try again."},
+        )
     return _render_code_screen(
         request,
         purpose="login",
@@ -404,11 +435,11 @@ def logout():
 
 
 @router.get("/forgot-password")
-def forgot_password_form(request: Request, db: Session = Depends(get_db)):
+def forgot_password_form(request: Request):
     return _render(
         request,
         "forgot_password.html",
-        {"current_user": _current_user(request, db)},
+        {"current_user": _current_user(request)},
     )
 
 
@@ -418,7 +449,15 @@ def forgot_password(
     email: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = db.scalar(select(User).where(User.email == email.strip().lower()))
+    try:
+        user = db.scalar(select(User).where(User.email == email.strip().lower()))
+    except Exception:
+        db.rollback()
+        return _render(
+            request,
+            "forgot_password.html",
+            {"error": "Password recovery could not be completed right now. Please try again."},
+        )
     if not user:
         # Don't reveal if email exists
         return _render(
@@ -441,6 +480,13 @@ def forgot_password(
             request,
             "forgot_password.html",
             {"error": "Recovery code was not sent. Please try again."},
+        )
+    except Exception:
+        db.rollback()
+        return _render(
+            request,
+            "forgot_password.html",
+            {"error": "Password recovery could not be completed right now. Please try again."},
         )
 
     return _render_code_screen(
@@ -542,14 +588,13 @@ def reset_password_route(
 @router.get("/register/team-admin")
 def team_admin_registration_form(
     request: Request,
-    db: Session = Depends(get_db),
     is_first: str | None = None,
 ):
     return _render(
         request,
         "team_admin_register.html",
         {
-            "current_user": _current_user(request, db),
+            "current_user": _current_user(request),
             "is_first": is_first == "true" if is_first else None,
         },
     )
@@ -621,8 +666,8 @@ def team_admin_registration(
                 {"error": "Invalid Team ID format.", "is_first": False},
             )
 
-    photo_path = save_upload(photo, "admin-photos")
     try:
+        photo_path = _safe_upload(photo, "admin-photos")
         team_admin = create_team_admin_registration(
             db,
             full_name=full_name,
@@ -653,6 +698,13 @@ def team_admin_registration(
             "team_admin_register.html",
             {"error": "Verification code was not sent. Please try again.", "is_first": is_first_admin == "true"},
         )
+    except Exception:
+        db.rollback()
+        return _render(
+            request,
+            "team_admin_register.html",
+            {"error": "Registration could not be completed right now. Please try again.", "is_first": is_first_admin == "true"},
+        )
 
     return _render_code_screen(
         request,
@@ -664,7 +716,10 @@ def team_admin_registration(
 
 @router.get("/register/super-admin")
 def super_admin_registration_form(request: Request, db: Session = Depends(get_db)):
-    super_admin_count = db.scalar(select(func.count()).select_from(SuperAdmin)) or 0
+    try:
+        super_admin_count = db.scalar(select(func.count()).select_from(SuperAdmin)) or 0
+    except Exception:
+        super_admin_count = 0
     return _render(
         request,
         "super_admin_register.html",
@@ -686,7 +741,19 @@ def super_admin_registration(
     photo: UploadFile | None = File(None),
     db: Session = Depends(get_db),
 ):
-    super_admin_count = db.scalar(select(func.count()).select_from(SuperAdmin)) or 0
+    try:
+        super_admin_count = db.scalar(select(func.count()).select_from(SuperAdmin)) or 0
+    except Exception:
+        db.rollback()
+        return _render(
+            request,
+            "super_admin_register.html",
+            {
+                "error": "Registration could not be completed right now. Please try again.",
+                "super_admin_count": 0,
+                "super_admin_limit": 5,
+            },
+        )
     if password != confirm_password:
         return _render(
             request,
@@ -698,8 +765,8 @@ def super_admin_registration(
             },
         )
 
-    photo_path = save_upload(photo, "admin-photos")
     try:
+        photo_path = _safe_upload(photo, "admin-photos")
         super_admin = create_super_admin_registration(
             db,
             full_name=full_name,
@@ -730,6 +797,17 @@ def super_admin_registration(
             "super_admin_register.html",
             {
                 "error": "Verification code was not sent. Please try again.",
+                "super_admin_count": super_admin_count,
+                "super_admin_limit": 5,
+            },
+        )
+    except Exception:
+        db.rollback()
+        return _render(
+            request,
+            "super_admin_register.html",
+            {
+                "error": "Registration could not be completed right now. Please try again.",
                 "super_admin_count": super_admin_count,
                 "super_admin_limit": 5,
             },
@@ -798,8 +876,8 @@ def resend_verification_email_route(
         response = _redirect(_destination_for_user(user))
         response.delete_cookie(VERIFY_CHALLENGE_COOKIE)
         return response
-    verification_code = issue_email_verification_code(db, user)
     try:
+        verification_code = issue_email_verification_code(db, user)
         send_verification_code(to_email=user.email, code=verification_code)
     except EmailDeliveryError:
         return _render_code_screen(
@@ -808,6 +886,15 @@ def resend_verification_email_route(
             user=user,
             message="Enter the verification code sent to your email address.",
             error="Verification code was not sent. Please try again.",
+        )
+    except Exception:
+        db.rollback()
+        return _render_code_screen(
+            request,
+            purpose="email_verification",
+            user=user,
+            message="Enter the verification code sent to your email address.",
+            error="Verification code could not be sent right now. Please try again.",
         )
     return _render_code_screen(
         request,
@@ -1282,8 +1369,8 @@ def create_team_route(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    logo_path = save_upload(logo, "team-logos")
     try:
+        logo_path = _safe_upload(logo, "team-logos")
         register_team(
             db,
             team_admin_id=team_admin.team_admin_id,
@@ -1297,6 +1384,12 @@ def create_team_route(
         )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    except Exception:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Team registration could not be completed right now. Please try again."},
+        )
     return _redirect("/team-admin/dashboard")
 
 
@@ -1368,40 +1461,39 @@ def create_player_route(
             "team_admin/action_result.html",
             {"error": "Parent contact can only contain numbers, +, -, or spaces."},
         )
-
-    photo_path = save_upload(passport_photo, "player-photos")
-    # Parent/Guardian Consent Form is now the main agreement form
-    agreement_form_path = save_upload(parent_consent_picture, "player-agreements")
-    if not agreement_form_path:
-        # Fallback to player_agreement_form if parent_consent_picture not provided
-        agreement_form_path = save_upload(player_agreement_form, "player-agreements")
-    if not agreement_form_path:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Parent/Guardian Consent Form is required."},
-        )
-    documents: list[tuple[str, str]] = []
-    
-    # Add Parent/Guardian Consent Form to documents list
-    if agreement_form_path:
-        documents.append(("Parent/Guardian Consent Form", agreement_form_path))
-    
-    identity_file_path = save_upload(identity_document, "player-documents")
-    if identity_file_path:
-        documents.append((identity_document_type.strip() or "Identity Document", identity_file_path))
-
-    for document_type, upload in [
-        ("Passport", passport_document),
-        ("Birth Certificate", birth_certificate),
-        ("National ID", national_id_document),
-        ("Medical Certificate", medical_certificate),
-    ]:
-        file_path = save_upload(upload, "player-documents")
-        if file_path:
-            documents.append((document_type, file_path))
-
     try:
+        photo_path = _safe_upload(passport_photo, "player-photos")
+        # Parent/Guardian Consent Form is now the main agreement form
+        agreement_form_path = _safe_upload(parent_consent_picture, "player-agreements")
+        if not agreement_form_path:
+            # Fallback to player_agreement_form if parent_consent_picture not provided
+            agreement_form_path = _safe_upload(player_agreement_form, "player-agreements")
+        if not agreement_form_path:
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": "Parent/Guardian Consent Form is required."},
+            )
+        documents: list[tuple[str, str]] = []
+
+        # Add Parent/Guardian Consent Form to documents list
+        if agreement_form_path:
+            documents.append(("Parent/Guardian Consent Form", agreement_form_path))
+
+        identity_file_path = _safe_upload(identity_document, "player-documents")
+        if identity_file_path:
+            documents.append((identity_document_type.strip() or "Identity Document", identity_file_path))
+
+        for document_type, upload in [
+            ("Passport", passport_document),
+            ("Birth Certificate", birth_certificate),
+            ("National ID", national_id_document),
+            ("Medical Certificate", medical_certificate),
+        ]:
+            file_path = _safe_upload(upload, "player-documents")
+            if file_path:
+                documents.append((document_type, file_path))
+
         register_player(
             db,
             team_id=team_id,
@@ -1422,6 +1514,12 @@ def create_player_route(
         )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    except Exception:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Player registration could not be completed right now. Please try again."},
+        )
 
     return _redirect("/team-admin/dashboard")
 
@@ -1452,12 +1550,11 @@ def renew_player_route(
             "team_admin/action_result.html",
             {"error": "Invalid registration period."},
         )
-    
-    # Try parent_consent_picture first, then fallback to player_agreement_form
-    agreement_form_path = save_upload(parent_consent_picture, "player-agreements")
-    if not agreement_form_path:
-        agreement_form_path = save_upload(player_agreement_form, "player-agreements")
     try:
+        # Try parent_consent_picture first, then fallback to player_agreement_form
+        agreement_form_path = _safe_upload(parent_consent_picture, "player-agreements")
+        if not agreement_form_path:
+            agreement_form_path = _safe_upload(player_agreement_form, "player-agreements")
         renewal_request = renew_player_registration(
             db,
             team_admin_id=team_admin.team_admin_id,
@@ -1467,6 +1564,12 @@ def renew_player_route(
         )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    except Exception:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Renewal registration could not be completed right now. Please try again."},
+        )
     player_name = renewal_request.player.full_name if renewal_request.player else f"player #{renewal_request.player_id}"
     return _render(
         request,
@@ -1542,11 +1645,11 @@ def complete_transfer_route(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    # Try player_consent_form first, then fallback to player_agreement_form
-    agreement_form_path = save_upload(player_consent_form, "player-agreements")
-    if not agreement_form_path:
-        agreement_form_path = save_upload(player_agreement_form, "player-agreements")
     try:
+        # Try player_consent_form first, then fallback to player_agreement_form
+        agreement_form_path = _safe_upload(player_consent_form, "player-agreements")
+        if not agreement_form_path:
+            agreement_form_path = _safe_upload(player_agreement_form, "player-agreements")
         complete_transfer_registration(
             db,
             team_admin_id=team_admin.team_admin_id,
@@ -1555,6 +1658,12 @@ def complete_transfer_route(
         )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    except Exception:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Transfer registration could not be completed right now. Please try again."},
+        )
     return _redirect("/team-admin/dashboard")
 
 
@@ -1658,16 +1767,14 @@ def register_transferred_player_route(
 ):
     """Register a transferred player on the receiving team after approved transfer."""
     team_admin = _require_team_admin(request, db)
-    
-    consent_form_path = save_upload(consent_form, "player-agreements")
-    if not consent_form_path:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Parent/Guardian Consent Form is required for transfer registration."},
-        )
-    
     try:
+        consent_form_path = _safe_upload(consent_form, "player-agreements")
+        if not consent_form_path:
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": "Parent/Guardian Consent Form is required for transfer registration."},
+            )
         register_transferred_player(
             db,
             transfer_id=transfer_id,
@@ -1676,6 +1783,12 @@ def register_transferred_player_route(
         )
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    except Exception:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Transfer registration could not be completed right now. Please try again."},
+        )
     
     return _render(
         request,
