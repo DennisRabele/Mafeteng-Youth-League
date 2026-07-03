@@ -37,6 +37,7 @@ from app.services.registration import (
     verify_email_code,
     verify_login_code,
 )
+from app.services.league import create_fixture
 
 
 def make_session():
@@ -349,6 +350,152 @@ def test_super_admin_registration_is_limited_to_five_accounts():
         assert "maximum of 5" in str(exc)
     else:
         raise AssertionError("Expected the sixth Super Admin registration to fail.")
+
+
+def test_fixture_creation_records_the_super_admin_who_set_it():
+    db = make_session()
+    category = seed_category(db)
+    super_admin = create_super_admin_registration(
+        db,
+        full_name="Fixture Admin",
+        email="fixture-admin@example.test",
+        password="Password123",
+        photo_path=None,
+    )
+
+    home_admin = create_team_admin_registration(
+        db,
+        full_name="Home Admin",
+        team_name="Blue Eagles",
+        email="home-admin@example.test",
+        password="Password123",
+        national_id="NID-HOME",
+        phone="+26650000019",
+        photo_path=None,
+    )
+    away_admin = create_team_admin_registration(
+        db,
+        full_name="Away Admin",
+        team_name="Red Warriors",
+        email="away-admin@example.test",
+        password="Password123",
+        national_id="NID-AWAY",
+        phone="+26650000020",
+        photo_path=None,
+    )
+    home_admin = approve_team_admin(db, home_admin.team_admin_id)
+    away_admin = approve_team_admin(db, away_admin.team_admin_id)
+
+    home_team = register_team(
+        db,
+        team_admin_id=home_admin.team_admin_id,
+        team_name="Blue Eagles",
+        category_id=category.category_id,
+        contact_information="+26650000021",
+        team_address="Blue Road",
+        training_ground="Blue Training",
+        home_ground="Blue Stadium",
+        logo=None,
+    )
+    away_team = register_team(
+        db,
+        team_admin_id=away_admin.team_admin_id,
+        team_name="Red Warriors",
+        category_id=category.category_id,
+        contact_information="+26650000022",
+        team_address="Red Road",
+        training_ground="Red Training",
+        home_ground="Red Stadium",
+        logo=None,
+    )
+    home_team = approve_team(db, home_team.team_id)
+    away_team = approve_team(db, away_team.team_id)
+
+    fixture = create_fixture(
+        db,
+        category_id=category.category_id,
+        home_team_id=home_team.team_id,
+        away_team_id=away_team.team_id,
+        fixture_date=datetime.utcnow() + timedelta(days=10),
+        venue="Youth Stadium",
+        created_by_super_admin_id=super_admin.admin_id,
+    )
+
+    assert fixture.created_by_super_admin_id == super_admin.admin_id
+    assert fixture.created_by_super_admin is not None
+    assert fixture.created_by_super_admin.user.full_name == "Fixture Admin"
+    assert fixture.match is not None
+
+
+def test_fixture_creation_rejects_category_mismatches():
+    db = make_session()
+    category = seed_category(db)
+    mismatch_category = Category(season_id=category.season_id, category_name="Female U13")
+    db.add(mismatch_category)
+    db.commit()
+
+    home_admin = create_team_admin_registration(
+        db,
+        full_name="Mismatch Home Admin",
+        team_name="Mismatch Home",
+        email="mismatch-home@example.test",
+        password="Password123",
+        national_id="NID-MISMATCH-HOME",
+        phone="+26650000023",
+        photo_path=None,
+    )
+    away_admin = create_team_admin_registration(
+        db,
+        full_name="Mismatch Away Admin",
+        team_name="Mismatch Away",
+        email="mismatch-away@example.test",
+        password="Password123",
+        national_id="NID-MISMATCH-AWAY",
+        phone="+26650000024",
+        photo_path=None,
+    )
+    home_admin = approve_team_admin(db, home_admin.team_admin_id)
+    away_admin = approve_team_admin(db, away_admin.team_admin_id)
+
+    home_team = register_team(
+        db,
+        team_admin_id=home_admin.team_admin_id,
+        team_name="Mismatch Home",
+        category_id=category.category_id,
+        contact_information="+26650000025",
+        team_address="Home Road",
+        training_ground="Home Training",
+        home_ground="Home Ground",
+        logo=None,
+    )
+    away_team = register_team(
+        db,
+        team_admin_id=away_admin.team_admin_id,
+        team_name="Mismatch Away",
+        category_id=category.category_id,
+        contact_information="+26650000026",
+        team_address="Away Road",
+        training_ground="Away Training",
+        home_ground="Away Ground",
+        logo=None,
+    )
+    home_team = approve_team(db, home_team.team_id)
+    away_team = approve_team(db, away_team.team_id)
+
+    try:
+        create_fixture(
+            db,
+            category_id=mismatch_category.category_id,
+            home_team_id=home_team.team_id,
+            away_team_id=away_team.team_id,
+            fixture_date=datetime.utcnow() + timedelta(days=10),
+            venue="Youth Stadium",
+            created_by_super_admin_id=None,
+        )
+    except RegistrationError as exc:
+        assert "Selected teams must belong to the chosen category." in str(exc)
+    else:
+        raise AssertionError("Expected the category mismatch to be rejected.")
 
 
 def test_rejection_reasons_are_required_and_saved():
