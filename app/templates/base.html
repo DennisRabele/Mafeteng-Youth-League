@@ -8,6 +8,7 @@
     <script src="{{ url_for('static', path='/js/dashboard.js') }}?v=20260707" defer></script>
   </head>
   <body>
+    {% set is_team_admin_home = app_mode == 'team_admin' and request.url.path == '/' %}
     <div class="loading-overlay" data-loading-overlay>
       <div class="loading-ring">
         <img src="{{ assets.league_logo }}" alt="{{ app_name }} loading logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';">
@@ -28,37 +29,26 @@
         <span></span>
         <span></span>
       </button>
-      <nav class="topnav">
-        {% if current_user and current_user.role == 'super_admin' %}
+      {% if current_user and current_user.role == 'super_admin' %}
+        <nav class="topnav">
           <a data-loading-trigger href="/super-admin">Dashboard</a>
           <form data-loading-form method="post" action="/logout">
             <button class="button button-outline" type="submit">Logout</button>
           </form>
-        {% elif current_user and current_user.role == 'team_admin' and app_mode != 'super_admin' %}
-          {% if current_user.team_admin_profile and current_user.team_admin_profile.status == 'approved' %}
-            <a data-loading-trigger href="/team-admin/dashboard">Dashboard</a>
-            <a data-loading-trigger href="/team-admin/account">My Account</a>
-          {% else %}
-            <a data-loading-trigger href="/team-admin/account">My Account</a>
-            <a data-loading-trigger href="/register/team-admin?re_register=1">Re-register</a>
-          {% endif %}
-          <form data-loading-form method="post" action="/logout">
-            <button class="button button-outline" type="submit">Logout</button>
-          </form>
-        {% else %}
-          {% if app_mode == 'super_admin' %}
-            <a data-loading-trigger class="active" href="/">Home</a>
-          {% elif app_mode == 'team_admin' %}
-            <a data-loading-trigger class="active" href="/">Home</a>
-          {% endif %}
+        </nav>
+      {% elif current_user and current_user.role == 'team_admin' and app_mode != 'super_admin' %}
+      {% elif app_mode == 'super_admin' %}
+        <nav class="topnav">
+          <a data-loading-trigger class="active" href="/">Home</a>
           <a data-loading-trigger href="/login">Login</a>
-          {% if app_mode == 'super_admin' %}
-            <a data-loading-trigger class="button button-primary" href="/register/super-admin">Register</a>
-          {% elif app_mode != 'super_admin' %}
-            <a data-loading-trigger class="button button-primary" href="/register/team-admin">Register</a>
-          {% endif %}
-        {% endif %}
-      </nav>
+          <a data-loading-trigger class="button button-primary" href="/register/super-admin">Register</a>
+        </nav>
+      {% elif app_mode != 'super_admin' and not is_team_admin_home %}
+        <nav class="topnav">
+          <a data-loading-trigger href="/login">Login</a>
+          <a data-loading-trigger class="button button-primary" href="/register/team-admin">Register</a>
+        </nav>
+      {% endif %}
     </header>
     <aside class="nav-drawer" id="mobile-navigation" data-nav-drawer aria-label="Mobile navigation" hidden>
       <div class="nav-drawer-head">
@@ -93,14 +83,17 @@
             <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="performances" data-dashboard-route="/team-admin/dashboard">Performances</button>
             <button class="drawer-link" type="button" data-loading-trigger data-nav-section-target="notifications" data-dashboard-route="/team-admin/dashboard">Notifications</button>
             <a data-loading-trigger class="drawer-link" href="/team-admin/account">My Account</a>
+            <form data-loading-form method="post" action="/logout">
+              <button class="drawer-link destructive" type="submit">Logout</button>
+            </form>
             <a data-loading-trigger class="drawer-link" href="/team-admin/dashboard">Dashboard</a>
           {% else %}
             <a data-loading-trigger class="drawer-link" href="/team-admin/account">My Account</a>
             <a data-loading-trigger class="drawer-link" href="/register/team-admin?re_register=1">Re-register</a>
+            <form data-loading-form method="post" action="/logout">
+              <button class="drawer-link destructive" type="submit">Logout</button>
+            </form>
           {% endif %}
-          <form data-loading-form method="post" action="/logout">
-            <button class="drawer-link destructive" type="submit">Logout</button>
-          </form>
         {% else %}
           <a data-loading-trigger class="drawer-link" href="/">Home</a>
           <a data-loading-trigger class="drawer-link" href="/login">Login</a>
