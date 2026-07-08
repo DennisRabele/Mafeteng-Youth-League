@@ -1393,7 +1393,7 @@
 
       <div class="fixture-board" id="fixtures-board" data-fixture-bucket="{{ fixture_filters.bucket }}">
         {% for fixture in filtered_fixtures %}
-        <article class="fixture-card fixture-card--compact" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
+        <article class="fixture-card fixture-card--viewer" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
           <div class="fixture-card__date">
             <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
             <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
@@ -1423,10 +1423,18 @@
                 <span>{{ fixture.away_team.team_name }}</span>
               </div>
             </div>
+            <div class="fixture-meta">
+              <span class="fixture-badge">{{ fixture.category.category_name }}</span>
+              <span class="fixture-subtle">{{ fixture.dashboard_bucket|replace('_', ' ')|title }}</span>
+            </div>
           </div>
           <div class="fixture-card__venue">
             <strong>{{ fixture.venue }}</strong>
             <span>Venue</span>
+          </div>
+          <div class="fixture-card__status">
+            <span class="status {{ fixture.status }}">{{ fixture.status }}</span>
+            <small>Published by {% if fixture.dashboard_created_by != '-' %}{{ fixture.dashboard_created_by }}{% else %}System{% endif %}</small>
           </div>
         </article>
         {% else %}
