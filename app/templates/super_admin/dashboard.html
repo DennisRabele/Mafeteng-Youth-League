@@ -728,7 +728,7 @@
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select onchange="filterDashboardPanels('league-tables', this.value, event)">
+          <select data-dashboard-category-filter="league-tables" onchange="filterDashboardPanels('league-tables', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>

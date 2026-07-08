@@ -23,7 +23,7 @@
     </div>
 
     {% if dashboard_notice %}
-      <p class="alert {% if dashboard_notice_kind == 'error' %}error{% else %}success{% endif %}" style="margin-bottom: 1.5rem;">
+      <p class="alert dashboard-notice {% if dashboard_notice_kind == 'error' %}error{% else %}success{% endif %}" data-dashboard-notice style="margin-bottom: 1.5rem;">
         {{ dashboard_notice }}
       </p>
     {% endif %}
@@ -1088,6 +1088,18 @@
             }
           }
 
+          const dashboardNotice = document.querySelector('[data-dashboard-notice]');
+
+          function dismissDashboardNotice() {
+            if (!dashboardNotice || dashboardNotice.classList.contains('is-fading')) {
+              return;
+            }
+            dashboardNotice.classList.add('is-fading');
+            window.setTimeout(() => {
+              dashboardNotice.hidden = true;
+            }, 220);
+          }
+
           function applyMyPlayersFilters() {
             const section = document.getElementById('my-players');
             if (!section) {
@@ -1155,6 +1167,15 @@
           
           document.addEventListener('DOMContentLoaded', handlePlayerNameInput);
           document.addEventListener('DOMContentLoaded', applyMyPlayersFilters);
+          document.addEventListener('DOMContentLoaded', () => {
+            if (dashboardNotice) {
+              window.setTimeout(dismissDashboardNotice, 5000);
+            }
+            const filterSelect = document.querySelector('[data-dashboard-category-filter="league-tables"]');
+            if (filterSelect) {
+              filterDashboardPanels('league-tables', filterSelect.value, null);
+            }
+          });
         </script>
       </div>
     </section>
@@ -1173,7 +1194,7 @@
             {% for team in approved_teams %}
               <article class="panel" style="margin:0; border-left:4px solid #2d6cdf;">
                 <div style="display:flex; gap:0.85rem; align-items:center; margin-bottom:0.85rem;">
-                  <div class="account-photo" style="width:72px; height:72px; flex:0 0 auto;">
+                  <div class="account-photo account-photo--logo" style="flex:0 0 92px;">
                     {% if team.logo %}
                       <img src="{{ team.logo }}" alt="{{ team.team_name }}">
                     {% else %}
@@ -1473,7 +1494,7 @@
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select onchange="filterDashboardPanels('league-tables', this.value, event)">
+          <select data-dashboard-category-filter="league-tables" onchange="filterDashboardPanels('league-tables', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
