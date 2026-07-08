@@ -1365,7 +1365,8 @@
         <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
       </div>
 
-      <form class="fixture-toolbar" id="fixture-filter-form" method="get" action="/team-admin/dashboard#fixtures">
+      <form class="fixture-toolbar" id="fixture-filter-form" method="get" action="/team-admin/dashboard">
+        <input type="hidden" name="dashboard_section" value="fixtures">
         <label class="filter-select">All Competitions
           <select name="fixture_category" id="fixture-category-filter" onchange="this.form.submit()">
             <option value="all" {% if fixture_filters.category == 'all' %}selected{% endif %}>All Competitions</option>
