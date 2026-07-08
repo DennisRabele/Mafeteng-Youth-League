@@ -1161,7 +1161,7 @@ textarea:focus {
 }
 
 .fixture-card--viewer {
-  grid-template-columns: 108px 84px minmax(0, 1.85fr) minmax(120px, 1fr) 140px;
+  grid-template-columns: 108px 84px minmax(0, 1.95fr) minmax(140px, 1fr);
 }
 
 .fixture-card__date {
@@ -1178,13 +1178,13 @@ textarea:focus {
 }
 
 .fixture-card__day {
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 900;
   line-height: 0.9;
 }
 
 .fixture-card__month {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1203,25 +1203,28 @@ textarea:focus {
   align-items: center;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  justify-content: center;
+  text-align: center;
 }
 
 .fixture-card__time strong {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 900;
+  line-height: 1;
 }
 
 .fixture-card__fixture {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
 .fixture-matchup {
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
 .fixture-inline {
@@ -1234,7 +1237,7 @@ textarea:focus {
 .fixture-team {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -1250,6 +1253,7 @@ textarea:focus {
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.14em;
+  justify-self: center;
 }
 
 .fixture-logo {
@@ -1297,10 +1301,12 @@ textarea:focus {
 .fixture-card__venue {
   display: grid;
   gap: 4px;
+  align-content: center;
 }
 
 .fixture-card__venue strong {
   font-size: 14px;
+  line-height: 1.25;
 }
 
 .fixture-card__score {
@@ -1917,20 +1923,11 @@ td {
   }
 
   .fixture-card--viewer {
-    grid-template-columns: 92px 72px minmax(0, 1fr) minmax(110px, 1fr) 120px;
+    grid-template-columns: 92px 72px minmax(0, 1fr) minmax(110px, 1fr);
   }
 
   .fixture-card__fixture {
-    grid-column: span 2;
-  }
-
-  .fixture-card__venue,
-  .fixture-card__status {
-    grid-column: span 1;
-  }
-
-  .fixture-card__actions {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 }
 
@@ -2086,6 +2083,15 @@ td {
 
   .fixture-card__date {
     min-height: 88px;
+  }
+
+  .fixture-matchup {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .fixture-vs {
+    justify-self: start;
   }
 
   .actions-cell form,

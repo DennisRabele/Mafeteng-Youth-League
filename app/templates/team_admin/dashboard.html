@@ -1427,18 +1427,10 @@
                 <span>{{ fixture.away_team.team_name }}</span>
               </div>
             </div>
-            <div class="fixture-meta">
-              <span class="fixture-badge">{{ fixture.category.category_name }}</span>
-              <span class="fixture-subtle">{{ fixture.dashboard_bucket|replace('_', ' ')|title }}</span>
-            </div>
           </div>
           <div class="fixture-card__venue">
             <strong>{{ fixture.venue }}</strong>
             <span>Venue</span>
-          </div>
-          <div class="fixture-card__status">
-            <span class="status {{ fixture.status }}">{{ fixture.status }}</span>
-            <small>Published by {% if fixture.dashboard_created_by != '-' %}{{ fixture.dashboard_created_by }}{% else %}System{% endif %}</small>
           </div>
         </article>
         {% else %}
