@@ -1407,18 +1407,22 @@
             <div class="fixture-matchup">
               <div class="fixture-team">
                 {% if fixture.home_team.logo %}
-                  <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
+                  <span class="fixture-logo-frame" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 32px;overflow:hidden;border:1px solid var(--line);border-radius:999px;background:#fff;">
+                    <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}" style="width:100%;height:100%;object-fit:contain;display:block;padding:3px;">
+                  </span>
                 {% else %}
-                  <span class="fixture-logo fallback">{{ fixture.home_team.team_name[:1] }}</span>
+                  <span class="fixture-logo fallback" style="width:32px;height:32px;">{{ fixture.home_team.team_name[:1] }}</span>
                 {% endif %}
                 <span>{{ fixture.home_team.team_name }}</span>
               </div>
               <span class="fixture-vs">VS</span>
               <div class="fixture-team">
                 {% if fixture.away_team.logo %}
-                  <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
+                  <span class="fixture-logo-frame" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 32px;overflow:hidden;border:1px solid var(--line);border-radius:999px;background:#fff;">
+                    <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}" style="width:100%;height:100%;object-fit:contain;display:block;padding:3px;">
+                  </span>
                 {% else %}
-                  <span class="fixture-logo fallback">{{ fixture.away_team.team_name[:1] }}</span>
+                  <span class="fixture-logo fallback" style="width:32px;height:32px;">{{ fixture.away_team.team_name[:1] }}</span>
                 {% endif %}
                 <span>{{ fixture.away_team.team_name }}</span>
               </div>
