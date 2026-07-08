@@ -1161,7 +1161,7 @@ textarea:focus {
 }
 
 .fixture-card--viewer {
-  grid-template-columns: 108px 84px minmax(0, 1.95fr) minmax(140px, 1fr);
+  grid-template-columns: 108px 84px minmax(0, 1.8fr) minmax(120px, 1fr) 140px 180px;
 }
 
 .fixture-card__date {
@@ -1222,9 +1222,9 @@ textarea:focus {
 
 .fixture-matchup {
   align-items: center;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
 .fixture-inline {
@@ -1237,7 +1237,7 @@ textarea:focus {
 .fixture-team {
   align-items: center;
   display: flex;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -1253,7 +1253,6 @@ textarea:focus {
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.14em;
-  justify-self: center;
 }
 
 .fixture-logo {
@@ -1301,12 +1300,10 @@ textarea:focus {
 .fixture-card__venue {
   display: grid;
   gap: 4px;
-  align-content: center;
 }
 
 .fixture-card__venue strong {
   font-size: 14px;
-  line-height: 1.25;
 }
 
 .fixture-card__score {
@@ -1335,6 +1332,12 @@ textarea:focus {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 10px 12px;
+}
+
+.fixture-readonly {
+  align-items: flex-start;
+  display: grid;
+  gap: 8px;
 }
 
 .fixture-card__actions summary {
@@ -1923,11 +1926,20 @@ td {
   }
 
   .fixture-card--viewer {
-    grid-template-columns: 92px 72px minmax(0, 1fr) minmax(110px, 1fr);
+    grid-template-columns: 92px 72px minmax(0, 1fr) minmax(110px, 1fr) 120px 160px;
   }
 
   .fixture-card__fixture {
-    grid-column: auto;
+    grid-column: span 2;
+  }
+
+  .fixture-card__venue,
+  .fixture-card__status {
+    grid-column: span 1;
+  }
+
+  .fixture-card__actions {
+    grid-column: 1 / -1;
   }
 }
 
@@ -2085,13 +2097,14 @@ td {
     min-height: 88px;
   }
 
+  .fixture-inline,
   .fixture-matchup {
-    grid-template-columns: 1fr;
-    justify-items: start;
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .fixture-vs {
-    justify-self: start;
+    margin-left: 36px;
   }
 
   .actions-cell form,

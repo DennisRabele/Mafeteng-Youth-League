@@ -1393,7 +1393,7 @@
 
       <div class="fixture-board" id="fixtures-board" data-fixture-bucket="{{ fixture_filters.bucket }}">
         {% for fixture in filtered_fixtures %}
-        <article class="fixture-card fixture-card--viewer" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
+        <article class="fixture-card" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
           <div class="fixture-card__date">
             <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
             <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
@@ -1407,22 +1407,18 @@
             <div class="fixture-matchup">
               <div class="fixture-team">
                 {% if fixture.home_team.logo %}
-                  <span class="fixture-logo-frame" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 32px;overflow:hidden;border:1px solid var(--line);border-radius:999px;background:#fff;">
-                    <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}" style="width:100%;height:100%;object-fit:contain;display:block;padding:3px;">
-                  </span>
+                  <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
                 {% else %}
-                  <span class="fixture-logo fallback" style="width:32px;height:32px;">{{ fixture.home_team.team_name[:1] }}</span>
+                  <span class="fixture-logo fallback">{{ fixture.home_team.team_name[:1] }}</span>
                 {% endif %}
                 <span>{{ fixture.home_team.team_name }}</span>
               </div>
               <span class="fixture-vs">VS</span>
               <div class="fixture-team">
                 {% if fixture.away_team.logo %}
-                  <span class="fixture-logo-frame" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 32px;overflow:hidden;border:1px solid var(--line);border-radius:999px;background:#fff;">
-                    <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}" style="width:100%;height:100%;object-fit:contain;display:block;padding:3px;">
-                  </span>
+                  <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
                 {% else %}
-                  <span class="fixture-logo fallback" style="width:32px;height:32px;">{{ fixture.away_team.team_name[:1] }}</span>
+                  <span class="fixture-logo fallback">{{ fixture.away_team.team_name[:1] }}</span>
                 {% endif %}
                 <span>{{ fixture.away_team.team_name }}</span>
               </div>
@@ -1431,6 +1427,16 @@
           <div class="fixture-card__venue">
             <strong>{{ fixture.venue }}</strong>
             <span>Venue</span>
+          </div>
+          <div class="fixture-card__status">
+            <span class="status {{ fixture.status }}">{{ fixture.status }}</span>
+            <small>Published by {% if fixture.dashboard_created_by != '-' %}{{ fixture.dashboard_created_by }}{% else %}System{% endif %}</small>
+          </div>
+          <div class="fixture-card__actions">
+            <div class="fixture-readonly">
+              <span class="status approved">View only</span>
+              <small>Team admins can download cards but cannot edit fixtures.</small>
+            </div>
           </div>
         </article>
         {% else %}
