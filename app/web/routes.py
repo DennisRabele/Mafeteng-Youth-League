@@ -1,7 +1,8 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import csv
 import io
 import logging
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse, Response
@@ -58,6 +59,8 @@ from app.services.registration import (
     issue_email_verification_code,
     issue_login_code,
     issue_password_recovery_code,
+    process_player_registration_lifecycle,
+    get_player_registration_expiry_date,
     register_player,
     register_team,
     register_transferred_player,
@@ -101,6 +104,10 @@ def _render(request: Request, template: str, context: dict):
     context.setdefault("current_user", None)
     context.setdefault("message", None)
     context.setdefault("error", None)
+    if template in {"code_verification.html", "team_admin/action_result.html"}:
+        context.setdefault("hide_public_auth_nav", True)
+    else:
+        context.setdefault("hide_public_auth_nav", False)
     context.setdefault("app_name", settings.app_name)
     context.setdefault("app_mode", app_mode)
     context.setdefault("assets", assets)
@@ -145,6 +152,33 @@ def _redirect(location: str) -> RedirectResponse:
     return RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
 
 
+def _team_admin_dashboard_redirect(
+    *,
+    section: str,
+    notice: str,
+    notice_kind: str = "success",
+) -> RedirectResponse:
+    query = urlencode(
+        {
+            "notice": notice,
+            "notice_kind": notice_kind,
+        }
+    )
+    return _redirect(f"/team-admin/dashboard?{query}#{section}")
+
+
+def _decorate_player_registration_details(players: list[Player], db: Session) -> None:
+    today = date.today()
+    reminder_cutoff = today + timedelta(days=30)
+    for player in players:
+        expiry_date = get_player_registration_expiry_date(db, player)
+        player.registration_expiration_date = expiry_date
+        player.registration_is_expired = bool(expiry_date and expiry_date <= today)
+        player.registration_requires_renewal = bool(
+            expiry_date and today < expiry_date <= reminder_cutoff
+        )
+
+
 def _destination_for_user(user: User) -> str:
     if user.role == UserRole.SUPER_ADMIN.value:
         return "/super-admin"
@@ -174,6 +208,7 @@ def _render_code_screen(
                 "submit_label": "Continue",
                 "message": message,
                 "error": error,
+                "hide_public_auth_nav": True,
             },
         )
         response.set_cookie(
@@ -195,6 +230,7 @@ def _render_code_screen(
                 "submit_label": "Verify Code",
                 "message": message,
                 "error": error,
+                "hide_public_auth_nav": True,
             },
         )
         response.set_cookie(
@@ -215,6 +251,7 @@ def _render_code_screen(
             "submit_label": "Continue",
             "message": message,
             "error": error,
+            "hide_public_auth_nav": True,
         },
     )
     response.set_cookie(
@@ -915,6 +952,22 @@ def team_admin_registration(
         )
 
     if is_first_registration:
+        if normalized_team_code:
+            return _render(
+                request,
+                "team_admin_register.html",
+                {
+                    "error": "Team code is not required for the first team admin registration.",
+                    "is_first": True,
+                    "form_data": {
+                        "full_name": full_name,
+                        "team_name": team_name,
+                        "national_id": national_id,
+                        "phone": phone,
+                        "email": email,
+                    },
+                },
+            )
         if not normalized_team_name:
             return _render(
                 request,
@@ -934,11 +987,11 @@ def team_admin_registration(
     else:
         if not normalized_team_code and (not team_id or not team_id.strip()):
             return _render(
-                request,
-                "team_admin_register.html",
-                {
-                    "error": "Team code is required for additional team admin registrations.",
-                    "is_first": False,
+            request,
+            "team_admin_register.html",
+            {
+                "error": "Team code is required for additional team admin registrations.",
+                "is_first": False,
                     "form_data": {
                         "full_name": full_name,
                         "team_name": team_name,
@@ -977,7 +1030,7 @@ def team_admin_registration(
         team_admin = create_team_admin_registration(
             db,
             full_name=full_name,
-            team_name=normalized_team_name or None,
+            team_name=normalized_team_name if is_first_registration else None,
             national_id=national_id,
             phone=phone,
             email=email,
@@ -1639,10 +1692,13 @@ def team_admin_dashboard(
     fixture_bucket: str = "all",
     fixture_date_from: str | None = None,
     fixture_date_to: str | None = None,
+    notice: str | None = None,
+    notice_kind: str | None = None,
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
     restore_expired_loans(db)
+    process_player_registration_lifecycle(db)
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
     teams = db.scalars(
         select(Team)
@@ -1662,9 +1718,11 @@ def team_admin_dashboard(
         .where(Player.status != "transferred")
         .order_by(Player.player_id.desc())
     ).all()
+    _decorate_player_registration_details(players, db)
     approved_players = [
         player for player in players if player.status == ApprovalStatus.APPROVED.value
     ]
+    _decorate_player_registration_details(approved_players, db)
     renewal_requests = db.scalars(
         select(PlayerRegistrationRequest)
         .where(
@@ -1677,6 +1735,8 @@ def team_admin_dashboard(
         )
         .order_by(PlayerRegistrationRequest.registration_id.desc())
     ).all()
+    for renewal in renewal_requests:
+        renewal.registration_label = f"{renewal.registration_period} Year(s)"
     transfer_target_teams = db.scalars(
         select(Team)
         .options(selectinload(Team.category))
@@ -1791,6 +1851,8 @@ def team_admin_dashboard(
         {
             "current_user": team_admin.user,
             "team_admin": team_admin,
+            "dashboard_notice": notice,
+            "dashboard_notice_kind": notice_kind or "success",
             "categories": categories,
             "teams": teams,
             "approved_teams": approved_teams,
@@ -2047,32 +2109,38 @@ def create_team_route(
     normalized_team_name = (team_name or "").strip()
     normalized_team_code = (team_code or "").strip()
 
+    if is_first_team_registration and normalized_team_code:
+        return _team_admin_dashboard_redirect(
+            section="team-form",
+            notice="Team code is not required for the first team registration.",
+            notice_kind="error",
+        )
     if is_first_team_registration and not normalized_team_name:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Team name is required for the first team registration."},
+        return _team_admin_dashboard_redirect(
+            section="team-form",
+            notice="Team name is required for the first team registration.",
+            notice_kind="error",
         )
     if is_first_team_registration and normalized_team_name:
         expected_team_name = team_admin.requested_team_name.strip()
         if expected_team_name.casefold() != normalized_team_name.casefold():
-            return _render(
-                request,
-                "team_admin/action_result.html",
-                {"error": "Team name must exactly match the team name used in your Team Admin registration."},
+            return _team_admin_dashboard_redirect(
+                section="team-form",
+                notice="Team name must exactly match the team name used in your Team Admin registration.",
+                notice_kind="error",
             )
     if not is_first_team_registration and not normalized_team_code:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Team code is required for additional team registrations."},
+        return _team_admin_dashboard_redirect(
+            section="team-form",
+            notice="Team code is required for additional team registrations.",
+            notice_kind="error",
         )
     try:
         logo_path = _safe_upload(logo, "team-logos")
-        register_team(
+        registered_team = register_team(
             db,
             team_admin_id=team_admin.team_admin_id,
-            team_name=normalized_team_name or None,
+            team_name=normalized_team_name if is_first_team_registration else None,
             category_id=category_id,
             contact_information=contact_information,
             team_address=team_address,
@@ -2085,21 +2153,28 @@ def create_team_route(
             db,
             recipient_email=team_admin.user.email,
             title="Team registration submitted",
-            message=f"Your team {team_name} has been submitted and is awaiting approval.",
+            message=f"Your team {registered_team.team_name} has been submitted and is awaiting approval.",
             link="/team-admin/account",
             super_admin_title="Team registration submitted",
-            super_admin_message=f"{team_name} was submitted for approval.",
+            super_admin_message=f"{registered_team.team_name} was submitted for approval.",
             super_admin_link="/super-admin#teams",
         )
     except RegistrationError as exc:
-        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
-    except Exception:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Team registration could not be completed right now. Please try again."},
+        return _team_admin_dashboard_redirect(
+            section="team-form",
+            notice=str(exc),
+            notice_kind="error",
         )
-    return _redirect("/team-admin/dashboard")
+    except Exception:
+        return _team_admin_dashboard_redirect(
+            section="team-form",
+            notice="Team registration could not be completed right now. Please try again.",
+            notice_kind="error",
+        )
+    return _team_admin_dashboard_redirect(
+        section="team-form",
+        notice=f"Team registration for {registered_team.team_name} was submitted successfully and is now pending approval.",
+    )
 
 
 @router.post("/team-admin/players")
@@ -2133,50 +2208,50 @@ def create_player_route(
     team_admin = _require_team_admin(request, db)
     team = db.get(Team, team_id)
     if not team or team.team_admin_id != team_admin.team_admin_id:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "You can only register players for your own approved teams."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="You can only register players for your own approved teams.",
+            notice_kind="error",
         )
     
     # Validate full_name - only letters and spaces
     if not re.match(r"^[A-Za-z\s'\-]+$", full_name.strip()):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Player full name can only contain letters and spaces."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Player full name can only contain letters and spaces.",
+            notice_kind="error",
         )
     
     # Validate parent_name - only letters and spaces
     if not re.match(r"^[A-Za-z\s'\-]+$", parent_name.strip()):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Parent/Guardian name can only contain letters and spaces."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Parent/Guardian name can only contain letters and spaces.",
+            notice_kind="error",
         )
     
     # Validate nationality - only letters and spaces
     if not re.match(r"^[A-Za-z\s'\-]+$", nationality.strip()):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Nationality can only contain letters and spaces."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Nationality can only contain letters and spaces.",
+            notice_kind="error",
         )
     
     # Validate parent_contact - only numbers and symbols (+, -, space)
     if not re.match(r"^[0-9+\-\s]+$", parent_contact.strip()):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Parent contact can only contain numbers, +, -, or spaces."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Parent contact can only contain numbers, +, -, or spaces.",
+            notice_kind="error",
         )
     try:
         dob_value = datetime.strptime(dob.strip(), "%Y-%m-%d").date()
     except (ValueError, TypeError):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Date of birth must be entered in YYYY-MM-DD format."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Date of birth must be entered in YYYY-MM-DD format.",
+            notice_kind="error",
         )
     try:
         photo_path = _safe_upload(passport_photo, "player-photos")
@@ -2186,10 +2261,10 @@ def create_player_route(
             # Fallback to player_agreement_form if parent_consent_picture not provided
             agreement_form_path = _safe_upload(player_agreement_form, "player-agreements")
         if not agreement_form_path:
-            return _render(
-                request,
-                "team_admin/action_result.html",
-                {"error": "PARENT/GUARDIAN CONSENT FORM NOT UPLOADED."},
+            return _team_admin_dashboard_redirect(
+                section="player-form",
+                notice="Parent/Guardian consent form was not uploaded.",
+                notice_kind="error",
             )
         documents: list[tuple[str, str]] = []
 
@@ -2240,15 +2315,22 @@ def create_player_route(
             super_admin_link="/super-admin#players",
         )
     except RegistrationError as exc:
-        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice=str(exc),
+            notice_kind="error",
+        )
     except Exception:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Player registration could not be completed right now. Please try again."},
+        return _team_admin_dashboard_redirect(
+            section="player-form",
+            notice="Player registration could not be completed right now. Please try again.",
+            notice_kind="error",
         )
 
-    return _redirect("/team-admin/dashboard")
+    return _team_admin_dashboard_redirect(
+        section="player-form",
+        notice=f"Player registration for {full_name} was submitted successfully and is now pending approval.",
+    )
 
 
 @router.post("/team-admin/players/renewals")
@@ -2300,22 +2382,21 @@ def renew_player_route(
             super_admin_link="/super-admin#renewals",
         )
     except RegistrationError as exc:
-        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+        return _team_admin_dashboard_redirect(
+            section="my-players",
+            notice=str(exc),
+            notice_kind="error",
+        )
     except Exception:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Renewal registration could not be completed right now. Please try again."},
+        return _team_admin_dashboard_redirect(
+            section="my-players",
+            notice="Renewal registration could not be completed right now. Please try again.",
+            notice_kind="error",
         )
     player_name = renewal_request.player.full_name if renewal_request.player else f"player #{renewal_request.player_id}"
-    return _render(
-        request,
-        "team_admin/action_result.html",
-        {
-            "message": (
-                f"Renewal registration for {player_name} was submitted successfully and is now pending approval."
-            )
-        },
+    return _team_admin_dashboard_redirect(
+        section="my-players",
+        notice=f"Renewal registration for {player_name} was submitted successfully and is now pending approval.",
     )
 
 

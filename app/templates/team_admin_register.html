@@ -26,6 +26,22 @@
     <input type="hidden" name="is_first_admin" value="{% if is_first %}true{% else %}false{% endif %}">
     {% endif %}
 
+    {% if is_first is none %}
+      <div id="team_admin_mode_notice" class="alert" style="background:#f4f7fb; border-color:#6b7a90; margin-bottom: 1rem;">
+        Choose the option that matches your team. First-time registrations need the team name only. Additional admin registrations need the team code only.
+      </div>
+    {% endif %}
+
+    {% if is_first is true %}
+      <div id="team_admin_mode_notice" class="alert" style="background:#eef5ff; border-color:#2d6cdf;">
+        This is a first-time team admin registration, so no team code is needed yet. Enter the team name exactly as it should appear.
+      </div>
+    {% elif is_first is false %}
+      <div id="team_admin_mode_notice" class="alert" style="background:#fff2e8; border-color:#c26a00;">
+        This team already has another admin. The team code is required, and the team name will be pulled from the existing team record.
+      </div>
+    {% endif %}
+
     <div class="form-grid two">
       <label>Full Name
         <input name="full_name" value="{{ form_data.full_name if form_data else '' }}" required pattern="[A-Za-z\s'\-]+" title="Full name can only contain letters, spaces, apostrophes, and hyphens">
@@ -69,6 +85,7 @@
     const teamNameInput = document.getElementById('team_name_input');
     const teamCodeField = document.getElementById('team_code_field');
     const teamCodeInput = document.getElementById('team_code_input');
+    const modeNotice = document.getElementById('team_admin_mode_notice');
     if (!teamNameField || !teamNameInput || !teamCodeField || !teamCodeInput) {
       return;
     }
@@ -79,12 +96,22 @@
       teamCodeField.hidden = true;
       teamCodeInput.required = false;
       teamCodeInput.value = '';
+      if (modeNotice) {
+        modeNotice.textContent = 'This is a first-time team admin registration, so no team code is needed yet. Enter the team name exactly as it should appear.';
+        modeNotice.style.background = '#eef5ff';
+        modeNotice.style.borderColor = '#2d6cdf';
+      }
     } else {
       teamNameField.hidden = true;
       teamNameInput.required = false;
       teamNameInput.value = '';
       teamCodeField.hidden = false;
       teamCodeInput.required = true;
+      if (modeNotice) {
+        modeNotice.textContent = 'This team already has another admin. The team code is required, and the team name will be pulled from the existing team record.';
+        modeNotice.style.background = '#fff2e8';
+        modeNotice.style.borderColor = '#c26a00';
+      }
     }
   }
 

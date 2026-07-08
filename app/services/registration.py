@@ -1,8 +1,10 @@
+from collections import defaultdict
 from datetime import date, datetime, timedelta
+import logging
 import re
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.security import (
@@ -47,6 +49,7 @@ AGE_GROUP_MAX_AGE = {
 PERSON_NAME_PATTERN = re.compile(r"^[A-Za-z]+(?:[A-Za-z\s'\-]*[A-Za-z])?$")
 TEAM_NAME_PATTERN = re.compile(r"^[A-Za-z0-9]+(?:[A-Za-z0-9\s'\-&]*[A-Za-z0-9])?$")
 PHONE_PATTERN = re.compile(r"^[0-9+\-\s]+$")
+logger = logging.getLogger(__name__)
 
 
 def _normalize_text(value: str | None) -> str:
@@ -388,6 +391,82 @@ def _player_registration_expiry_date(db: Session, player: Player) -> date | None
     if not start_date or not registration_period:
         return None
     return _add_years(start_date, registration_period)
+
+
+def get_player_registration_expiry_date(db: Session, player: Player) -> date | None:
+    """Return the date when the player's current registration expires."""
+    return _player_registration_expiry_date(db, player)
+
+
+def _send_registration_expiry_reminders(db: Session) -> int:
+    reminder_deadline = date.today() + timedelta(days=30)
+    players = db.scalars(
+        select(Player)
+        .options(selectinload(Player.team))
+        .where(
+            Player.status == ApprovalStatus.APPROVED.value,
+            Player.approved_at.is_not(None),
+            Player.registration_reminder_sent_at.is_(None),
+        )
+    ).all()
+
+    grouped: dict[int, list[tuple[Player, date]]] = defaultdict(list)
+    for player in players:
+        expiry_date = _player_registration_expiry_date(db, player)
+        if not expiry_date or expiry_date <= date.today() or expiry_date > reminder_deadline:
+            continue
+        if not player.team or not player.team.team_admin_id:
+            continue
+        grouped[player.team.team_admin_id].append((player, expiry_date))
+
+    reminders_sent = 0
+    for team_admin_id, team_players in grouped.items():
+        team_ids = sorted({player.team_id for player, _ in team_players if player.team_id})
+        if not team_ids:
+            continue
+
+        lines = [
+            f"{player.full_name} ({expiry_date.isoformat()})"
+            for player, expiry_date in sorted(
+                team_players,
+                key=lambda item: (item[0].full_name.lower(), item[1]),
+            )
+        ]
+
+        try:
+            from app.services.league import notify_team_admins_for_teams
+
+            notify_team_admins_for_teams(
+                db,
+                team_ids,
+                "Player registration expiry reminder",
+                (
+                    "The following player registrations will expire within the next 30 days:\n"
+                    + "\n".join(lines)
+                    + "\n\nPlease renew them before the expiration date."
+                ),
+                "/team-admin/dashboard#my-players",
+            )
+        except Exception:
+            continue
+
+        for player, _ in team_players:
+            player.registration_reminder_sent_at = datetime.utcnow()
+        reminders_sent += 1
+
+    if reminders_sent:
+        db.commit()
+    return reminders_sent
+
+
+def process_player_registration_lifecycle(db: Session) -> dict[str, int]:
+    """Process player registration reminders and expiry maintenance."""
+    stats = {"reminders_sent": 0}
+    try:
+        stats["reminders_sent"] = _send_registration_expiry_reminders(db)
+    except Exception:
+        logger.exception("Player registration reminder processing failed")
+    return stats
 
 
 def _release_player_for_transfer(transfer: PlayerTransferRequest) -> None:
@@ -889,6 +968,7 @@ def register_player(
             if age_group
             else "Player is not eligible for any youth age category."
         ),
+        registration_reminder_sent_at=None,
         status=(
             ApprovalStatus.PENDING.value
             if age_group
@@ -1178,6 +1258,7 @@ def approve_player(
     player.status = ApprovalStatus.APPROVED.value
     player.approved_by_super_admin_id = approved_by_super_admin_id
     player.approved_at = datetime.utcnow()
+    player.registration_reminder_sent_at = None
     if not player.player_code:
         sequence = _next_code_number(db, Player.player_code)
         player.player_code = (
@@ -1266,6 +1347,7 @@ def approve_renewal(db: Session, registration_id: int, approved_by_super_admin_i
     request.player.registration_period = request.registration_period
     request.player.approved_by_super_admin_id = approved_by_super_admin_id
     request.player.approved_at = datetime.utcnow()
+    request.player.registration_reminder_sent_at = None
     request.player.rejection_reason = None
     db.commit()
     db.refresh(request)
@@ -1549,6 +1631,7 @@ def register_transferred_player(
         agreement_form_path=consent_form_path,
         photo_path=player.photo_path,
         age_group=player.age_group,
+        registration_reminder_sent_at=None,
         status=ApprovalStatus.PENDING.value,
         approved_at=None,
     )

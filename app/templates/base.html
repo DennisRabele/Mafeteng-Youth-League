@@ -37,13 +37,13 @@
           </form>
         </nav>
       {% elif current_user and current_user.role == 'team_admin' and app_mode != 'super_admin' %}
-      {% elif app_mode == 'super_admin' %}
+      {% elif app_mode == 'super_admin' and not hide_public_auth_nav %}
         <nav class="topnav">
           <a data-loading-trigger class="active" href="/">Home</a>
           <a data-loading-trigger href="/login">Login</a>
           <a data-loading-trigger class="button button-primary" href="/register/super-admin">Register</a>
         </nav>
-      {% elif app_mode != 'super_admin' and not is_team_admin_home %}
+      {% elif app_mode != 'super_admin' and not is_team_admin_home and not hide_public_auth_nav %}
         <nav class="topnav">
           <a data-loading-trigger href="/login">Login</a>
           <a data-loading-trigger class="button button-primary" href="/register/team-admin">Register</a>
@@ -96,11 +96,13 @@
           {% endif %}
         {% else %}
           <a data-loading-trigger class="drawer-link" href="/">Home</a>
-          <a data-loading-trigger class="drawer-link" href="/login">Login</a>
-          {% if app_mode == 'super_admin' %}
-            <a data-loading-trigger class="drawer-link" href="/register/super-admin">Register</a>
-          {% elif app_mode != 'super_admin' %}
-            <a data-loading-trigger class="drawer-link" href="/register/team-admin">Register</a>
+          {% if not hide_public_auth_nav %}
+            <a data-loading-trigger class="drawer-link" href="/login">Login</a>
+            {% if app_mode == 'super_admin' %}
+              <a data-loading-trigger class="drawer-link" href="/register/super-admin">Register</a>
+            {% elif app_mode != 'super_admin' %}
+              <a data-loading-trigger class="drawer-link" href="/register/team-admin">Register</a>
+            {% endif %}
           {% endif %}
         {% endif %}
       </div>

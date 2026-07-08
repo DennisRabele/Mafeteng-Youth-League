@@ -30,6 +30,8 @@ from app.services.registration import (
     reject_player,
     reject_team,
     reject_team_admin,
+    get_player_registration_expiry_date,
+    process_player_registration_lifecycle,
     request_player_from_team,
     request_player_transfer,
     respond_to_transfer,
@@ -158,6 +160,110 @@ def test_registration_approval_flow_creates_team_season_and_qr_card():
     assert player.player_code == "MDL001BEM17"
     assert player.qr_player_card is not None
     assert player.qr_player_card.qr_code == player.player_code
+
+
+def test_additional_team_admin_can_register_with_team_code_only():
+    db = make_session()
+    category = seed_category(db)
+
+    first_admin = create_team_admin_registration(
+        db,
+        full_name="First Admin",
+        team_name="Blue Eagles",
+        email="first@example.test",
+        password="Password123",
+        national_id="NID-FIRST",
+        phone="+26650000010",
+        photo_path="/uploads/admin-photos/first.png",
+    )
+    first_admin = approve_team_admin(db, first_admin.team_admin_id)
+    team = register_team(
+        db,
+        team_admin_id=first_admin.team_admin_id,
+        team_name="Blue Eagles",
+        category_id=category.category_id,
+        contact_information="+26650000011",
+        team_address="Main Road",
+        training_ground="Training Ground",
+        home_ground="Home Ground",
+        logo="/uploads/team-logos/blue-eagles.png",
+    )
+    team = approve_team(db, team.team_id)
+
+    second_admin = create_team_admin_registration(
+        db,
+        full_name="Second Admin",
+        team_name=None,
+        email="second@example.test",
+        password="Password123",
+        national_id="NID-SECOND",
+        phone="+26650000012",
+        photo_path="/uploads/admin-photos/second.png",
+        team_code=team.team_code,
+    )
+
+    assert second_admin.requested_team_name == "Blue Eagles"
+    assert second_admin.team_id == team.team_id
+
+
+def test_player_registration_expiry_reminder_is_sent_once():
+    db = make_session()
+    category = seed_category(db)
+
+    team_admin = create_team_admin_registration(
+        db,
+        full_name="Reminder Admin",
+        team_name="Gold Stars",
+        email="reminder@example.test",
+        password="Password123",
+        national_id="NID-REMINDER",
+        phone="+26650000020",
+        photo_path="/uploads/admin-photos/reminder.png",
+    )
+    team_admin = approve_team_admin(db, team_admin.team_admin_id)
+    team = register_team(
+        db,
+        team_admin_id=team_admin.team_admin_id,
+        team_name="Gold Stars",
+        category_id=category.category_id,
+        contact_information="+26650000021",
+        team_address="Gold Road",
+        training_ground="Gold Training",
+        home_ground="Gold Ground",
+        logo="/uploads/team-logos/gold-stars.png",
+    )
+    team = approve_team(db, team.team_id)
+
+    player = register_player(
+        db,
+        team_id=team.team_id,
+        full_name="Expiry Player",
+        gender="Male",
+        dob=years_ago(17),
+        nationality="Mosotho",
+        email=None,
+        residential_address=None,
+        parent_name="Parent Expiry",
+        parent_contact="+26650000022",
+        school_name=None,
+        position="Defender",
+        agreement_form_path="/uploads/player-agreements/expiry.pdf",
+        photo_path="/uploads/player-photos/expiry.jpg",
+        documents=[],
+        registration_period=1,
+    )
+    approve_player(db, player.player_id)
+    player.approved_at = datetime.utcnow() - timedelta(days=335)
+    db.commit()
+
+    expiry_date = get_player_registration_expiry_date(db, player)
+    assert expiry_date is not None
+    assert expiry_date <= date.today() + timedelta(days=30)
+
+    stats = process_player_registration_lifecycle(db)
+    assert stats["reminders_sent"] == 1
+    db.refresh(player)
+    assert player.registration_reminder_sent_at is not None
 
 
 def test_player_registration_rejects_periods_longer_than_the_player_allows():
