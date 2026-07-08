@@ -1142,6 +1142,10 @@ textarea:focus {
   padding: 14px;
 }
 
+.fixture-card--compact {
+  grid-template-columns: 108px 84px minmax(0, 1.85fr) minmax(120px, 1fr);
+}
+
 .fixture-card__date {
   align-items: center;
   background: var(--black);
@@ -1869,6 +1873,10 @@ td {
     grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr);
   }
 
+  .fixture-card--compact {
+    grid-template-columns: 92px 72px minmax(0, 1fr) minmax(110px, 1fr);
+  }
+
   .fixture-card__fixture {
     grid-column: span 2;
   }
@@ -2013,6 +2021,10 @@ td {
   }
 
   .fixture-card {
+    grid-template-columns: 1fr;
+  }
+
+  .fixture-card--compact {
     grid-template-columns: 1fr;
   }
 

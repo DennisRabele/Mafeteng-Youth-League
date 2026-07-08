@@ -97,12 +97,12 @@
               <td><span class="status {{ item.status }}">{{ item.status }}</span></td>
               <td>{% if item.approver_user %}{{ item.approver_user.full_name }}{% else %}-{% endif %}</td>
               <td class="actions-cell">
-                {% if item.status != 'approved' %}
+                {% if item.status == 'pending' %}
                 <form method="post" action="/super-admin/team-admins/{{ item.team_admin_id }}/approve">
                   <button class="button button-primary small" type="submit">Approve</button>
                 </form>
                 {% endif %}
-                {% if item.status != 'rejected' %}
+                {% if item.status == 'pending' %}
                 <form method="post" action="/super-admin/team-admins/{{ item.team_admin_id }}/reject">
                   <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
                   <button class="button button-danger small" type="submit">Reject</button>
@@ -172,12 +172,12 @@
               <td><span class="status {{ team.status }}">{{ team.status }}</span></td>
               <td>{% if team.approver_user %}{{ team.approver_user.full_name }}{% else %}-{% endif %}</td>
               <td class="actions-cell">
-                {% if team.status != 'approved' %}
+                {% if team.status == 'pending' %}
                 <form method="post" action="/super-admin/teams/{{ team.team_id }}/approve">
                   <button class="button button-primary small" type="submit">Approve</button>
                 </form>
                 {% endif %}
-                {% if team.status != 'rejected' %}
+                {% if team.status == 'pending' %}
                 <form method="post" action="/super-admin/teams/{{ team.team_id }}/reject">
                   <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
                   <button class="button button-danger small" type="submit">Reject</button>
@@ -285,12 +285,12 @@
               <td><span class="status {{ player.status }}">{{ player.status }}</span></td>
               <td>{% if player.approver_user %}{{ player.approver_user.full_name }}{% else %}-{% endif %}</td>
               <td class="actions-cell">
-                {% if player.status != 'approved' %}
+                {% if player.status == 'pending' %}
                 <form method="post" action="/super-admin/players/{{ player.player_id }}/approve">
                   <button class="button button-primary small" type="submit">Approve</button>
                 </form>
                 {% endif %}
-                {% if player.status != 'rejected' %}
+                {% if player.status == 'pending' %}
                 <form method="post" action="/super-admin/players/{{ player.player_id }}/reject">
                   <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
                   <button class="button button-danger small" type="submit">Reject</button>
@@ -363,12 +363,12 @@
               <td>{{ renewal.requested_by.user.full_name }}</td>
               <td>{% if renewal.approver_user %}{{ renewal.approver_user.full_name }}{% else %}-{% endif %}</td>
               <td class="actions-cell">
-                {% if renewal.status != 'approved' %}
+                {% if renewal.status == 'pending' %}
                 <form method="post" action="/super-admin/renewals/{{ renewal.registration_id }}/approve">
                   <button class="button button-primary small" type="submit">Approve</button>
                 </form>
                 {% endif %}
-                {% if renewal.status != 'rejected' %}
+                {% if renewal.status == 'pending' %}
                 <form method="post" action="/super-admin/renewals/{{ renewal.registration_id }}/reject">
                   <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
                   <button class="button button-danger small" type="submit">Reject</button>
@@ -451,12 +451,12 @@
               <td>{{ transfer.requested_by.user.full_name }}</td>
               <td>{% if transfer.approver_user %}{{ transfer.approver_user.full_name }}{% else %}-{% endif %}</td>
               <td class="actions-cell">
-                {% if transfer.status != 'approved' %}
+                {% if transfer.status == 'pending' %}
                 <form method="post" action="/super-admin/transfers/{{ transfer.registration_id }}/approve">
                   <button class="button button-primary small" type="submit">Approve</button>
                 </form>
                 {% endif %}
-                {% if transfer.status != 'rejected' %}
+                {% if transfer.status == 'pending' %}
                 <form method="post" action="/super-admin/transfers/{{ transfer.registration_id }}/reject">
                   <textarea class="reason-input" name="rejection_reason" placeholder="Reason" required></textarea>
                   <button class="button button-danger small" type="submit">Reject</button>
@@ -484,7 +484,10 @@
           <h2>Fixtures</h2>
           <p class="section-copy">Create, publish and reschedule fixtures for approved clubs only.</p>
         </div>
-        <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+          <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
+          <a class="button button-primary small" href="/super-admin/fixtures/export">Download Cards</a>
+        </div>
       </div>
 
       <details class="fixture-builder">
@@ -547,6 +550,7 @@
           <input name="fixture_date_to" id="fixture-date-to" type="date" value="{{ fixture_filters.date_to }}" onchange="this.form.submit()">
         </label>
         <button class="button button-primary" type="submit" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Filter</button>
+        <button class="button button-muted" type="submit" formaction="/super-admin/fixtures/export" formmethod="get" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Download Cards</button>
       </form>
 
       <div class="dashboard-chip-row fixture-tabs">
@@ -640,6 +644,7 @@
     <section class="panel dashboard-section" id="results" data-dashboard-section="results" hidden>
       <div class="panel-heading">
         <h2>Results</h2>
+        <a class="button button-primary small" href="/super-admin/results/export">Download Cards</a>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
@@ -719,6 +724,7 @@
     <section class="panel dashboard-section" id="league-tables" data-dashboard-section="league-tables" hidden>
       <div class="panel-heading">
         <h2>League Tables</h2>
+        <a class="button button-primary small" href="/super-admin/league-tables/export">Download Cards</a>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
@@ -738,6 +744,8 @@
             <table>
               <thead>
                 <tr>
+                  <th>Pos</th>
+                  <th>Logo</th>
                   <th>Team</th>
                   <th>P</th>
                   <th>W</th>
@@ -752,6 +760,14 @@
               <tbody>
                 {% for row in rows %}
                 <tr>
+                  <td>{{ row.position }}</td>
+                  <td>
+                    {% if row.team.logo %}
+                      <img class="thumb" src="{{ row.team.logo }}" alt="{{ row.team.team_name }}">
+                    {% else %}
+                      <span class="no-image">No logo</span>
+                    {% endif %}
+                  </td>
                   <td>{{ row.team.team_name }}</td>
                   <td>{{ row.played }}</td>
                   <td>{{ row.wins }}</td>
@@ -763,7 +779,7 @@
                   <td>{{ row.points }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="9" class="empty">No league table data yet.</td></tr>
+                <tr><td colspan="11" class="empty">No league table data yet.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -778,6 +794,7 @@
     <section class="panel dashboard-section" id="performances" data-dashboard-section="performances" hidden>
       <div class="panel-heading">
         <h2>Player Performances</h2>
+        <a class="button button-primary small" href="/super-admin/performances/export">Download Cards</a>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category

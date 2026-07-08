@@ -5,7 +5,6 @@
   <aside class="sidebar">
     <span class="menu-label">Menu</span>
     <button class="side-button active" type="button" data-section-target="team-form">Team registration</button>
-    <button class="side-button" type="button" data-section-target="player-form">Players Registration</button>
     <button class="side-button" type="button" data-section-target="my-teams">MY clubs</button>
     <button class="side-button" type="button" data-section-target="my-players">My Players</button>
     <button class="side-button" type="button" data-section-target="fixtures">Fixtures</button>
@@ -95,6 +94,9 @@
           <h1>Players Registration</h1>
           <p class="breadcrumb">Dashboard / Players Registration</p>
         </div>
+        <div class="alert" style="background:#eef5ff; border-color:#2d6cdf; margin-bottom: 1rem;" data-selected-player-team-banner>
+          Choose an approved club below to prefill the registration form.
+        </div>
 
         <!-- Registration Type Selection Screen -->
         <div id="registration-type-selector" class="registration-type-selector" style="display: block;">
@@ -173,7 +175,7 @@
                   <h2>Team Information</h2>
                   <div class="form-grid two">
                     <label>Team
-                      <select name="team_id" required>
+                      <select name="team_id" id="player-team-select" required>
                         <option value="">Select team</option>
                         {% for team in approved_teams %}
                           <option
@@ -1072,6 +1074,46 @@
               });
             }
           }
+
+          function prefillPlayerTeam(teamId) {
+            const teamSelect = document.getElementById('player-team-select');
+            const banner = document.querySelector('[data-selected-player-team-banner]');
+            if (!teamSelect) {
+              return;
+            }
+            teamSelect.value = teamId;
+            const selectedOption = teamSelect.selectedOptions[0];
+            if (banner && selectedOption) {
+              banner.textContent = `Player registration is prefilled for ${selectedOption.textContent}.`;
+            }
+          }
+
+          function applyMyPlayersFilters() {
+            const section = document.getElementById('my-players');
+            if (!section) {
+              return;
+            }
+            const status = section.dataset.statusFilter || 'all';
+            const teamId = section.dataset.teamFilter || 'all';
+            const rows = section.querySelectorAll('table tbody tr[data-row]');
+            const statusButtons = section.querySelectorAll('[data-filter]');
+            const teamButtons = section.querySelectorAll('[data-team-filter]');
+
+            statusButtons.forEach((btn) => {
+              btn.classList.toggle('button-primary', btn.dataset.filter === status);
+              btn.classList.toggle('button-muted', btn.dataset.filter !== status);
+            });
+            teamButtons.forEach((btn) => {
+              btn.classList.toggle('button-primary', btn.dataset.teamFilter === teamId);
+              btn.classList.toggle('button-muted', btn.dataset.teamFilter !== teamId);
+            });
+
+            rows.forEach((row) => {
+              const matchesStatus = status === 'all' || row.dataset.status === status;
+              const matchesTeam = teamId === 'all' || row.dataset.team === teamId;
+              row.style.display = matchesStatus && matchesTeam ? '' : 'none';
+            });
+          }
           
           function filterTeams(status) {
             const rows = document.querySelectorAll('#my-teams table tbody tr[data-row]');
@@ -1092,28 +1134,27 @@
               }
             });
           }
+
+          function filterMyPlayersTeam(teamId) {
+            const section = document.getElementById('my-players');
+            if (!section) {
+              return;
+            }
+            section.dataset.teamFilter = teamId;
+            applyMyPlayersFilters();
+          }
           
           function filterPlayers(status) {
-            const rows = document.querySelectorAll('#my-players table tbody tr[data-row]');
-            const buttons = document.querySelectorAll('#my-players [data-filter]');
-            
-            buttons.forEach(btn => btn.classList.remove('button-primary'));
-            buttons.forEach(btn => btn.classList.add('button-muted'));
-            event.target.classList.remove('button-muted');
-            event.target.classList.add('button-primary');
-            
-            rows.forEach(row => {
-              if (status === 'all') {
-                row.style.display = '';
-              } else if (row.dataset.status === status) {
-                row.style.display = '';
-              } else {
-                row.style.display = 'none';
-              }
-            });
+            const section = document.getElementById('my-players');
+            if (!section) {
+              return;
+            }
+            section.dataset.statusFilter = status;
+            applyMyPlayersFilters();
           }
           
           document.addEventListener('DOMContentLoaded', handlePlayerNameInput);
+          document.addEventListener('DOMContentLoaded', applyMyPlayersFilters);
         </script>
       </div>
     </section>
@@ -1122,7 +1163,38 @@
       <div class="panel-heading">
         <h2>MY clubs</h2>
       </div>
-      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+      {% if approved_teams %}
+        <div style="margin-bottom: 1.5rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:0.75rem;">
+            <p class="section-copy" style="margin:0;">Open an approved club to register players for that exact category.</p>
+            <button class="button button-primary small" type="button" data-section-target="player-form">Open Player Registration</button>
+          </div>
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+            {% for team in approved_teams %}
+              <article class="panel" style="margin:0; border-left:4px solid #2d6cdf;">
+                <div style="display:flex; gap:0.85rem; align-items:center; margin-bottom:0.85rem;">
+                  <div class="account-photo" style="width:72px; height:72px; flex:0 0 auto;">
+                    {% if team.logo %}
+                      <img src="{{ team.logo }}" alt="{{ team.team_name }}">
+                    {% else %}
+                      <span>{{ team.team_name[:1] }}</span>
+                    {% endif %}
+                  </div>
+                  <div>
+                    <h3 style="margin:0 0 0.25rem 0;">{{ team.team_name }}</h3>
+                    <p style="margin:0; color:#666;">{{ team.category.category_name }}</p>
+                  </div>
+                </div>
+                <p style="margin:0 0 0.75rem 0; color:#444;"><strong>Status:</strong> <span class="status approved">{{ team.status }}</span></p>
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                  <button class="button button-primary small" type="button" data-section-target="player-form" onclick="prefillPlayerTeam('{{ team.team_id }}')">Register Players</button>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
         <button class="button button-primary small" type="button" onclick="filterTeams('all')" data-filter="all">All</button>
         <button class="button button-muted small" type="button" onclick="filterTeams('approved')" data-filter="approved">Approved</button>
         <button class="button button-muted small" type="button" onclick="filterTeams('rejected')" data-filter="rejected">Rejected</button>
@@ -1132,6 +1204,7 @@
         <table>
           <thead>
             <tr>
+              <th>Logo</th>
               <th>Team</th>
               <th>Category</th>
               <th>Address</th>
@@ -1144,6 +1217,13 @@
           <tbody>
             {% for team in teams %}
             <tr data-row data-status="{{ team.status }}">
+              <td>
+                {% if team.logo %}
+                  <img class="thumb" src="{{ team.logo }}" alt="{{ team.team_name }}">
+                {% else %}
+                  <span class="no-image">No logo</span>
+                {% endif %}
+              </td>
               <td>{{ team.team_name }}</td>
               <td>{{ team.category.category_name }}</td>
               <td>{{ team.team_address }}</td>
@@ -1153,7 +1233,7 @@
               <td>{% if team.status == 'rejected' %}{{ team.rejection_reason or '-' }}{% else %}-{% endif %}</td>
             </tr>
             {% else %}
-            <tr><td colspan="7" class="empty">No teams submitted yet.</td></tr>
+            <tr><td colspan="8" class="empty">No teams submitted yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -1169,11 +1249,17 @@
       <div class="panel-heading">
         <h2>My Players</h2>
       </div>
-      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
         <button class="button button-primary small" type="button" onclick="filterPlayers('all')" data-filter="all">All</button>
         <button class="button button-muted small" type="button" onclick="filterPlayers('approved')" data-filter="approved">Approved</button>
         <button class="button button-muted small" type="button" onclick="filterPlayers('rejected')" data-filter="rejected">Rejected</button>
         <button class="button button-muted small" type="button" onclick="filterPlayers('pending')" data-filter="pending">Pending</button>
+      </div>
+      <div style="margin-bottom: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <button class="button button-primary small" type="button" onclick="filterMyPlayersTeam('all')" data-team-filter="all">All Clubs</button>
+        {% for team in approved_teams %}
+          <button class="button button-muted small" type="button" onclick="filterMyPlayersTeam('{{ team.team_id }}')" data-team-filter="{{ team.team_id }}">{{ team.team_name }} - {{ team.category.category_name }}</button>
+        {% endfor %}
       </div>
       <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
         <table>
@@ -1182,7 +1268,7 @@
           </thead>
           <tbody>
             {% for player in players %}
-            <tr data-row data-status="{{ player.status }}" class="{% if player.is_on_loan %}player-on-loan{% endif %}">
+            <tr data-row data-status="{{ player.status }}" data-team="{{ player.team.team_id }}" class="{% if player.is_on_loan %}player-on-loan{% endif %}">
               <td>{{ player.full_name }}{% if player.is_on_loan %}<span class="loan-marker">On Loan</span>{% endif %}</td>
               <td>{{ player.player_code or '-' }}</td>
               <td>{{ player.team.team_name }}</td>
@@ -1274,7 +1360,7 @@
           <input name="fixture_date_to" id="fixture-date-to" type="date" value="{{ fixture_filters.date_to }}" onchange="this.form.submit()">
         </label>
         <button class="button button-primary" type="submit" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Filter</button>
-        <button class="button button-muted" type="submit" formaction="/team-admin/dashboard/fixtures/export" formmethod="get" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Download CSV</button>
+        <button class="button button-muted" type="submit" formaction="/team-admin/dashboard/fixtures/export" formmethod="get" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Download Cards</button>
       </form>
 
       <div class="dashboard-chip-row fixture-tabs">
@@ -1286,7 +1372,7 @@
 
       <div class="fixture-board" id="fixtures-board" data-fixture-bucket="{{ fixture_filters.bucket }}">
         {% for fixture in filtered_fixtures %}
-        <article class="fixture-card" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
+        <article class="fixture-card fixture-card--compact" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
           <div class="fixture-card__date">
             <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
             <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
@@ -1316,27 +1402,10 @@
                 <span>{{ fixture.away_team.team_name }}</span>
               </div>
             </div>
-            <div class="fixture-meta">
-              <span class="fixture-badge">{{ fixture.category.category_name }}</span>
-              <span class="fixture-subtle">{{ fixture.dashboard_bucket|replace('_', ' ')|title }}</span>
-            </div>
           </div>
           <div class="fixture-card__venue">
             <strong>{{ fixture.venue }}</strong>
             <span>Venue</span>
-          </div>
-          <div class="fixture-card__status">
-            <span class="status {{ fixture.status }}">{{ fixture.status }}</span>
-          </div>
-          <div class="fixture-card__score">
-            <strong>
-              {% if fixture.match and fixture.match.home_score is not none and fixture.match.away_score is not none %}
-                {{ fixture.match.home_score }}-{{ fixture.match.away_score }}
-              {% else %}
-                -
-              {% endif %}
-            </strong>
-            <span>Score</span>
           </div>
         </article>
         {% else %}
@@ -1400,6 +1469,7 @@
     <section class="panel dashboard-section" id="league-tables" data-dashboard-section="league-tables" hidden>
       <div class="panel-heading">
         <h2>League Tables</h2>
+        <a class="button button-primary small" href="/team-admin/league-tables/export">Download Cards</a>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
@@ -1419,6 +1489,8 @@
             <table>
               <thead>
                 <tr>
+                  <th>Pos</th>
+                  <th>Logo</th>
                   <th>Team</th>
                   <th>P</th>
                   <th>W</th>
@@ -1433,6 +1505,14 @@
               <tbody>
                 {% for row in rows %}
                 <tr>
+                  <td>{{ row.position }}</td>
+                  <td>
+                    {% if row.team.logo %}
+                      <img class="thumb" src="{{ row.team.logo }}" alt="{{ row.team.team_name }}">
+                    {% else %}
+                      <span class="no-image">No logo</span>
+                    {% endif %}
+                  </td>
                   <td>{{ row.team.team_name }}</td>
                   <td>{{ row.played }}</td>
                   <td>{{ row.wins }}</td>
@@ -1444,7 +1524,7 @@
                   <td>{{ row.points }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="9" class="empty">No league table data yet.</td></tr>
+                <tr><td colspan="11" class="empty">No league table data yet.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -1586,13 +1666,15 @@
           <div><dt>National ID</dt><dd>{{ team_admin.national_id }}</dd></div>
           <div><dt>Team Name</dt><dd>{{ team_admin.requested_team_name }}</dd></div>
           <div><dt>Team Admin ID</dt><dd>{{ team_admin.admin_code or 'Pending approval' }}</dd></div>
-          {% if team_admin.assigned_team and team_admin.assigned_team.team_code %}
-            <div><dt>Team Code</dt><dd>{{ team_admin.assigned_team.team_code }}</dd></div>
+          {% if approved_team and approved_team.team_code %}
+            <div><dt>Team Code</dt><dd>{{ approved_team.team_code }}</dd></div>
           {% elif team_admin.status == 'approved' %}
-            <div><dt>Team Code</dt><dd>Ask a colleague team admin for the team code</dd></div>
+            <div><dt>Team Code</dt><dd>Team code will appear after the club approval is linked to a team record.</dd></div>
           {% endif %}
           <div><dt>Status</dt><dd><span class="status {{ team_admin.status }}">{{ team_admin.status }}</span></dd></div>
-          <div><dt>Explanation</dt><dd>{{ team_admin.rejection_reason or '-' }}</dd></div>
+          {% if team_admin.status == 'rejected' %}
+            <div><dt>Explanation</dt><dd>{{ team_admin.rejection_reason or '-' }}</dd></div>
+          {% endif %}
         </dl>
       </div>
     </section>

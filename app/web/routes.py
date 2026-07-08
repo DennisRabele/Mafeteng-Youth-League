@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
-import csv
-import io
 import logging
+from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
@@ -118,6 +118,29 @@ def _load_assets() -> dict[str, str]:
     return {
         "league_logo": "/static/images/logo.jpg",
     }
+
+
+@lru_cache(maxsize=1)
+def _load_export_styles() -> str:
+    return (BASE_DIR / "app" / "static" / "css" / "styles.css").read_text(encoding="utf-8")
+
+
+def _render_downloadable_cards(
+    template_name: str,
+    *,
+    filename: str,
+    context: dict,
+) -> Response:
+    template = templates.env.get_template(template_name)
+    html = template.render(
+        **context,
+        export_styles=_load_export_styles(),
+    )
+    return Response(
+        content=html,
+        media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _current_user(request: Request, db: Session | None = None) -> User | None:
@@ -1675,12 +1698,22 @@ def team_admin_welcome(request: Request, db: Session = Depends(get_db)):
 @router.get("/team-admin/account")
 def team_admin_account(request: Request, db: Session = Depends(get_db)):
     team_admin = _require_team_admin_account(request, db)
+    approved_team = db.scalar(
+        select(Team)
+        .options(selectinload(Team.category))
+        .where(
+            Team.team_admin_id == team_admin.team_admin_id,
+            Team.status == ApprovalStatus.APPROVED.value,
+        )
+        .order_by(Team.team_id.desc())
+    )
     return _render(
         request,
         "team_admin/account.html",
         {
             "current_user": team_admin.user,
             "team_admin": team_admin,
+            "approved_team": approved_team,
         },
     )
 
@@ -1709,6 +1742,7 @@ def team_admin_dashboard(
     approved_teams = [
         team for team in teams if team.status == ApprovalStatus.APPROVED.value
     ]
+    approved_team = approved_teams[0] if approved_teams else None
     own_team_ids = [team.team_id for team in teams]
     players = db.scalars(
         select(Player)
@@ -1819,7 +1853,7 @@ def team_admin_dashboard(
         .where(Player.status == ApprovalStatus.APPROVED.value)
         .order_by(Player.full_name)
     ).all()
-    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=own_team_ids), [])
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
     filtered_fixtures = _filter_fixtures_for_dashboard(
         fixtures,
         category_name=fixture_category,
@@ -1831,10 +1865,7 @@ def team_admin_dashboard(
         lambda: _load_result_submissions(db, team_ids=own_team_ids),
         [],
     )
-    league_tables = _safe_dashboard_value(
-        lambda: get_league_tables(db, team_ids=own_team_ids),
-        {},
-    )
+    league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     player_performances = _safe_dashboard_value(
         lambda: get_player_performances(db, team_ids=own_team_ids),
         {"scorers": [], "assisters": []},
@@ -1856,6 +1887,7 @@ def team_admin_dashboard(
             "categories": categories,
             "teams": teams,
             "approved_teams": approved_teams,
+            "approved_team": approved_team,
             "players": players,
             "approved_players": approved_players,
             "renewal_requests": renewal_requests,
@@ -1900,7 +1932,7 @@ def export_team_admin_fixtures(
             select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
         ).all()
     ]
-    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=team_ids), [])
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
     fixtures = _filter_fixtures_for_dashboard(
         fixtures,
         category_name=fixture_category,
@@ -1908,30 +1940,142 @@ def export_team_admin_fixtures(
         date_from=fixture_date_from,
         date_to=fixture_date_to,
     )
+    filename = f"fixtures_{fixture_category}_{fixture_bucket}.html".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Fixtures Cards Export",
+            "subtitle": "Downloaded fixture cards rendered with the same dashboard design.",
+            "export_kind": "fixtures",
+            "fixtures": fixtures,
+            "fixture_filters": {
+                "category": fixture_category,
+                "bucket": fixture_bucket,
+                "date_from": fixture_date_from or "",
+                "date_to": fixture_date_to or "",
+            },
+        },
+    )
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Category", "Home Team", "Away Team", "Date", "Time", "Venue", "Status", "Score"])
-    for fixture in fixtures:
-        score = "-"
-        if fixture.match and fixture.match.home_score is not None and fixture.match.away_score is not None:
-            score = f"{fixture.match.home_score}-{fixture.match.away_score}"
-        writer.writerow([
-            fixture.category.category_name if fixture.category else "",
-            fixture.home_team.team_name if fixture.home_team else "",
-            fixture.away_team.team_name if fixture.away_team else "",
-            fixture.fixture_date.strftime("%Y-%m-%d"),
-            fixture.fixture_date.strftime("%I:%M %p").lstrip("0"),
-            fixture.venue,
-            fixture.status,
-            score,
-        ])
 
-    filename = f"fixtures_{fixture_category}_{fixture_bucket}.csv".replace(" ", "_")
-    return Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+@router.get("/team-admin/league-tables/export")
+def export_team_admin_league_tables(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_team_admin(request, db)
+    league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
+    filename = "team_admin_league_tables.html"
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "League Tables Cards Export",
+            "subtitle": "Downloaded league table cards rendered with the same dashboard design.",
+            "export_kind": "league_tables",
+            "league_tables": league_tables,
+        },
+    )
+
+
+@router.get("/super-admin/fixtures/export")
+def export_super_admin_fixtures(
+    request: Request,
+    fixture_category: str = "all",
+    fixture_bucket: str = "all",
+    fixture_date_from: str | None = None,
+    fixture_date_to: str | None = None,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
+    fixtures = _filter_fixtures_for_dashboard(
+        fixtures,
+        category_name=fixture_category,
+        bucket=fixture_bucket,
+        date_from=fixture_date_from,
+        date_to=fixture_date_to,
+    )
+    filename = f"super_admin_fixtures_{fixture_category}_{fixture_bucket}.html".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Fixtures Cards Export",
+            "subtitle": "Downloaded fixture cards rendered with the same dashboard design.",
+            "export_kind": "fixtures",
+            "fixtures": fixtures,
+            "fixture_filters": {
+                "category": fixture_category,
+                "bucket": fixture_bucket,
+                "date_from": fixture_date_from or "",
+                "date_to": fixture_date_to or "",
+            },
+        },
+    )
+
+
+@router.get("/super-admin/results/export")
+def export_super_admin_results(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    result_submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
+    filename = "super_admin_results.html"
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Results Cards Export",
+            "subtitle": "Downloaded result cards rendered with the same dashboard design.",
+            "export_kind": "results",
+            "result_submissions": result_submissions,
+        },
+    )
+
+
+@router.get("/super-admin/league-tables/export")
+def export_super_admin_league_tables(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
+    filename = "super_admin_league_tables.html"
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "League Tables Cards Export",
+            "subtitle": "Downloaded league table cards rendered with the same dashboard design.",
+            "export_kind": "league_tables",
+            "league_tables": league_tables,
+        },
+    )
+
+
+@router.get("/super-admin/performances/export")
+def export_super_admin_performances(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    player_performances = _safe_dashboard_value(
+        lambda: get_player_performances(db),
+        {"scorers": [], "assisters": []},
+    )
+    filename = "super_admin_performances.html"
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Player Performances Cards Export",
+            "subtitle": "Downloaded performance cards rendered with the same dashboard design.",
+            "export_kind": "performances",
+            "player_performances": player_performances,
+        },
     )
 
 

@@ -591,7 +591,7 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
 
     ordered: dict[str, list[dict[str, object]]] = {}
     for category_name, rows in standings.items():
-        ordered[category_name] = sorted(
+        ranked_rows = sorted(
             rows.values(),
             key=lambda row: (
                 -int(row["points"]),
@@ -600,6 +600,9 @@ def get_league_tables(db: Session, *, team_ids: Iterable[int] | None = None) -> 
                 str(row["team"].team_name).lower(),
             ),
         )
+        for position, row in enumerate(ranked_rows, start=1):
+            row["position"] = position
+        ordered[category_name] = ranked_rows
     return ordered
 
 
