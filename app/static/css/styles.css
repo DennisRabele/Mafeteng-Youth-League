@@ -1268,6 +1268,28 @@ textarea:focus {
   width: 32px;
 }
 
+.fixture-logo-frame {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 32px;
+  height: 32px;
+  justify-content: center;
+  overflow: hidden;
+  width: 32px;
+}
+
+.fixture-logo-frame .fixture-logo {
+  border: 0;
+  height: 100%;
+  max-height: none;
+  max-width: none;
+  padding: 3px;
+  width: 100%;
+}
+
 .fixture-logo.fallback {
   align-items: center;
   background: var(--soft);
