@@ -486,7 +486,7 @@
         </div>
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
           <a class="button button-muted small" href="#fixtures-board">View All Fixtures</a>
-          <a class="button button-primary small" href="/super-admin/fixtures/export">Download Cards</a>
+          <a class="button button-success small" href="/super-admin/fixtures/export">Download Cards</a>
         </div>
       </div>
 
@@ -534,7 +534,7 @@
         </form>
       </details>
 
-      <form class="fixture-toolbar" id="fixture-filter-form" method="get" action="/super-admin">
+      <form class="fixture-toolbar" id="fixture-filter-form" method="get" action="/super-admin#fixtures">
         <input type="hidden" name="dashboard_section" value="fixtures">
         <label class="filter-select">All Competitions
           <select name="fixture_category" id="fixture-category-filter" onchange="this.form.submit()">
@@ -551,7 +551,7 @@
           <input name="fixture_date_to" id="fixture-date-to" type="date" value="{{ fixture_filters.date_to }}" onchange="this.form.submit()">
         </label>
         <button class="button button-primary" type="submit" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Filter</button>
-        <button class="button button-muted" type="submit" formaction="/super-admin/fixtures/export" formmethod="get" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Download Cards</button>
+        <button class="button button-success" type="submit" formaction="/super-admin/fixtures/export" formmethod="get" name="fixture_bucket" value="{{ fixture_filters.bucket }}">Download Cards</button>
       </form>
 
       <div class="dashboard-chip-row fixture-tabs">
@@ -650,7 +650,7 @@
       <div class="panel-heading">
         <h2>Results</h2>
         <div class="panel-heading-actions">
-          <button class="button button-primary small" type="button" onclick="window.location='/super-admin/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download Cards</button>
+          <button class="button button-success small" type="button" onclick="window.location='/super-admin/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download Cards</button>
         </div>
       </div>
       <div class="dashboard-chip-row">
@@ -732,7 +732,7 @@
       <div class="panel-heading">
         <h2>League Tables</h2>
         <div class="panel-heading-actions">
-          <button class="button button-primary small" type="button" onclick="window.location='/super-admin/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download Cards</button>
+          <button class="button button-success small" type="button" onclick="window.location='/super-admin/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download Cards</button>
         </div>
       </div>
       <div class="dashboard-chip-row">
@@ -804,7 +804,7 @@
       <div class="panel-heading">
         <h2>Player Performances</h2>
         <div class="panel-heading-actions">
-          <button class="button button-primary small" type="button" onclick="window.location='/super-admin/performances/export?metric=' + encodeURIComponent(document.getElementById('performance-metric-filter').value || 'all') + '&category=' + encodeURIComponent(document.getElementById('performance-category-filter').value || 'all')">Download Cards</button>
+          <button class="button button-success small" type="button" onclick="window.location='/super-admin/performances/export?metric=' + encodeURIComponent(document.getElementById('performance-metric-filter').value || 'all') + '&category=' + encodeURIComponent(document.getElementById('performance-category-filter').value || 'all')">Download Cards</button>
         </div>
       </div>
       <div class="dashboard-chip-row">
