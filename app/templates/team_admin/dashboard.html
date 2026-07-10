@@ -1194,7 +1194,7 @@
             {% for team in approved_teams %}
               <article class="panel" style="margin:0; border-left:4px solid #2d6cdf;">
                 <div style="display:flex; gap:0.85rem; align-items:center; margin-bottom:0.85rem;">
-                  <div class="account-photo account-photo--logo" style="flex:0 0 92px;">
+                  <div class="account-photo account-photo--logo club-logo-card">
                     {% if team.logo %}
                       <img src="{{ team.logo }}" alt="{{ team.team_name }}">
                     {% else %}
@@ -1356,7 +1356,7 @@
       </div>
     </section>
 
-    <section class="panel dashboard-section fixtures-panel" id="fixtures" data-dashboard-section="fixtures" hidden>
+    <section class="panel dashboard-section fixtures-panel team-fixtures-panel" id="fixtures" data-dashboard-section="fixtures" hidden>
       <div class="panel-heading">
         <div>
           <h2>Fixtures</h2>
@@ -1394,7 +1394,7 @@
 
       <div class="fixture-board" id="fixtures-board" data-fixture-bucket="{{ fixture_filters.bucket }}">
         {% for fixture in filtered_fixtures %}
-        <article class="fixture-card" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
+        <article class="fixture-card fixture-card--compact fixture-card--team" data-fixture-card data-category="{{ fixture.category.category_name }}" data-bucket="{{ fixture.dashboard_bucket }}" data-date="{{ fixture.fixture_date.strftime('%Y-%m-%d') }}">
           <div class="fixture-card__date">
             <span class="fixture-card__day">{{ fixture.dashboard_date_day }}</span>
             <span class="fixture-card__month">{{ fixture.dashboard_date_month }}</span>
@@ -1453,10 +1453,13 @@
     <section class="panel dashboard-section" id="results" data-dashboard-section="results" hidden>
       <div class="panel-heading">
         <h2>Result Submissions</h2>
+        <div class="panel-heading-actions">
+          <button class="button button-primary small" type="button" onclick="window.location='/team-admin/dashboard/results/export?category=' + encodeURIComponent(document.getElementById('results-category-filter').value || 'all')">Download Cards</button>
+        </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select onchange="filterDashboardCategory('results', this.value, event)">
+          <select id="results-category-filter" onchange="filterDashboardCategory('results', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -1505,11 +1508,13 @@
     <section class="panel dashboard-section" id="league-tables" data-dashboard-section="league-tables" hidden>
       <div class="panel-heading">
         <h2>League Tables</h2>
-        <a class="button button-primary small" href="/team-admin/league-tables/export">Download Cards</a>
+        <div class="panel-heading-actions">
+          <button class="button button-primary small" type="button" onclick="window.location='/team-admin/dashboard/league-tables/export?category=' + encodeURIComponent(document.getElementById('league-table-category').value || 'all')">Download Cards</button>
+        </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select data-dashboard-category-filter="league-tables" onchange="filterDashboardPanels('league-tables', this.value, event)">
+          <select id="league-table-category" data-dashboard-category-filter="league-tables" onchange="filterDashboardPanels('league-tables', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -1575,10 +1580,13 @@
     <section class="panel dashboard-section" id="performances" data-dashboard-section="performances" hidden>
       <div class="panel-heading">
         <h2>Player Performances</h2>
+        <div class="panel-heading-actions">
+          <button class="button button-primary small" type="button" onclick="window.location='/team-admin/dashboard/performances/export?metric=' + encodeURIComponent(document.getElementById('performance-metric-filter').value || 'all') + '&category=' + encodeURIComponent(document.getElementById('performance-category-filter').value || 'all')">Download Cards</button>
+        </div>
       </div>
       <div class="dashboard-chip-row">
         <label class="filter-select">Category
-          <select onchange="filterDashboardCategory('performances', this.value, event)">
+          <select id="performance-category-filter" onchange="filterDashboardCategory('performances', this.value, event)">
             <option value="all">All Categories</option>
             {% for category in categories %}
               <option value="{{ category.category_name }}">{{ category.category_name }}</option>
@@ -1586,7 +1594,7 @@
           </select>
         </label>
         <label class="filter-select">Metric
-          <select onchange="filterDashboardMetric('performances', this.value, event)">
+          <select id="performance-metric-filter" onchange="filterDashboardMetric('performances', this.value, event)">
             <option value="all">All Metrics</option>
             <option value="goals">Goals</option>
             <option value="assists">Assists</option>

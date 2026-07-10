@@ -132,6 +132,7 @@ def _render_downloadable_cards(
     context: dict,
 ) -> Response:
     template = templates.env.get_template(template_name)
+    context.setdefault("export_filename", filename)
     html = template.render(
         **context,
         export_styles=_load_export_styles(),
@@ -139,7 +140,6 @@ def _render_downloadable_cards(
     return Response(
         content=html,
         media_type="text/html",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -1940,7 +1940,7 @@ def export_team_admin_fixtures(
         date_from=fixture_date_from,
         date_to=fixture_date_to,
     )
-    filename = f"fixtures_{fixture_category}_{fixture_bucket}.html".replace(" ", "_")
+    filename = f"fixtures_{fixture_category}_{fixture_bucket}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -1959,14 +1959,18 @@ def export_team_admin_fixtures(
     )
 
 
+@router.get("/team-admin/dashboard/league-tables/export")
 @router.get("/team-admin/league-tables/export")
 def export_team_admin_league_tables(
     request: Request,
+    category: str = "all",
     db: Session = Depends(get_db),
 ):
     _require_team_admin(request, db)
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
-    filename = "team_admin_league_tables.html"
+    if category != "all":
+        league_tables = {category: league_tables.get(category, [])}
+    filename = f"team_admin_league_tables_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -1975,6 +1979,74 @@ def export_team_admin_league_tables(
             "subtitle": "Downloaded league table cards rendered with the same dashboard design.",
             "export_kind": "league_tables",
             "league_tables": league_tables,
+        },
+    )
+
+
+@router.get("/team-admin/dashboard/results/export")
+def export_team_admin_results(
+    request: Request,
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    team_ids = [
+        team.team_id
+        for team in db.scalars(
+            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
+        ).all()
+    ]
+    submissions = _safe_dashboard_value(lambda: _load_result_submissions(db, team_ids=team_ids), [])
+    submissions = _filter_result_submissions_by_category(submissions, category)
+    filename = f"team_admin_results_{category}.png".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Results Cards Export",
+            "subtitle": "Downloaded result cards rendered with the same dashboard design.",
+            "export_kind": "results",
+            "result_submissions": submissions,
+        },
+    )
+
+
+@router.get("/team-admin/dashboard/performances/export")
+def export_team_admin_performances(
+    request: Request,
+    metric: str = "all",
+    category: str = "all",
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    team_ids = [
+        team.team_id
+        for team in db.scalars(
+            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
+        ).all()
+    ]
+    performances = _safe_dashboard_value(
+        lambda: get_player_performances(db, team_ids=team_ids),
+        {"scorers": [], "assisters": []},
+    )
+    for key in ("scorers", "assisters"):
+        performances[key] = [
+            row for row in performances.get(key, [])
+            if category == "all" or row["category_name"] == category
+        ]
+    if metric == "goals":
+        performances["assisters"] = []
+    elif metric == "assists":
+        performances["scorers"] = []
+    filename = f"team_admin_performances_{metric}_{category}.png".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Player Performances Cards Export",
+            "subtitle": "Downloaded performance cards rendered with the same dashboard design.",
+            "export_kind": "performances",
+            "player_performances": performances,
         },
     )
 
@@ -1997,7 +2069,7 @@ def export_super_admin_fixtures(
         date_from=fixture_date_from,
         date_to=fixture_date_to,
     )
-    filename = f"super_admin_fixtures_{fixture_category}_{fixture_bucket}.html".replace(" ", "_")
+    filename = f"super_admin_fixtures_{fixture_category}_{fixture_bucket}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2019,11 +2091,13 @@ def export_super_admin_fixtures(
 @router.get("/super-admin/results/export")
 def export_super_admin_results(
     request: Request,
+    category: str = "all",
     db: Session = Depends(get_db),
 ):
     _require_super_admin(request, db)
     result_submissions = _safe_dashboard_value(lambda: _load_result_submissions(db), [])
-    filename = "super_admin_results.html"
+    result_submissions = _filter_result_submissions_by_category(result_submissions, category)
+    filename = f"super_admin_results_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2039,11 +2113,14 @@ def export_super_admin_results(
 @router.get("/super-admin/league-tables/export")
 def export_super_admin_league_tables(
     request: Request,
+    category: str = "all",
     db: Session = Depends(get_db),
 ):
     _require_super_admin(request, db)
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
-    filename = "super_admin_league_tables.html"
+    if category != "all":
+        league_tables = {category: league_tables.get(category, [])}
+    filename = f"super_admin_league_tables_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2059,6 +2136,8 @@ def export_super_admin_league_tables(
 @router.get("/super-admin/performances/export")
 def export_super_admin_performances(
     request: Request,
+    metric: str = "all",
+    category: str = "all",
     db: Session = Depends(get_db),
 ):
     _require_super_admin(request, db)
@@ -2066,7 +2145,16 @@ def export_super_admin_performances(
         lambda: get_player_performances(db),
         {"scorers": [], "assisters": []},
     )
-    filename = "super_admin_performances.html"
+    for key in ("scorers", "assisters"):
+        player_performances[key] = [
+            row for row in player_performances.get(key, [])
+            if category == "all" or row["category_name"] == category
+        ]
+    if metric == "goals":
+        player_performances["assisters"] = []
+    elif metric == "assists":
+        player_performances["scorers"] = []
+    filename = f"super_admin_performances_{metric}_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
