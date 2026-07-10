@@ -1403,35 +1403,14 @@
           <div class="fixture-card__time">
             <strong>{{ fixture.dashboard_time }}</strong>
             <span>{{ fixture.dashboard_day_name }}</span>
+            <span class="fixture-card__venue-inline">{{ fixture.venue }}</span>
           </div>
           <div class="fixture-card__fixture">
             <div class="fixture-matchup">
-              <div class="fixture-team">
-                {% if fixture.home_team.logo %}
-                  <span class="fixture-logo-frame">
-                    <img class="fixture-logo" src="{{ fixture.home_team.logo }}" alt="{{ fixture.home_team.team_name }}">
-                  </span>
-                {% else %}
-                  <span class="fixture-logo fallback fixture-logo-frame">{{ fixture.home_team.team_name[:1] }}</span>
-                {% endif %}
-                <span>{{ fixture.home_team.team_name }}</span>
-              </div>
+              <span class="fixture-team-name">{{ fixture.home_team.team_name }}</span>
               <span class="fixture-vs">VS</span>
-              <div class="fixture-team">
-                {% if fixture.away_team.logo %}
-                  <span class="fixture-logo-frame">
-                    <img class="fixture-logo" src="{{ fixture.away_team.logo }}" alt="{{ fixture.away_team.team_name }}">
-                  </span>
-                {% else %}
-                  <span class="fixture-logo fallback fixture-logo-frame">{{ fixture.away_team.team_name[:1] }}</span>
-                {% endif %}
-                <span>{{ fixture.away_team.team_name }}</span>
-              </div>
+              <span class="fixture-team-name">{{ fixture.away_team.team_name }}</span>
             </div>
-          </div>
-          <div class="fixture-card__venue">
-            <strong>{{ fixture.venue }}</strong>
-            <span>Venue</span>
           </div>
           <div class="fixture-card__status">
             <span class="status {{ fixture.status }}">{{ fixture.status }}</span>
