@@ -1469,6 +1469,14 @@ def super_admin_dashboard(
     ).all()
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
     fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
+    played_fixtures = [
+        fixture
+        for fixture in fixtures
+        if fixture.home_team
+        and fixture.away_team
+        and fixture.fixture_date <= datetime.utcnow()
+        and (fixture.home_team_id in own_team_ids or fixture.away_team_id in own_team_ids)
+    ]
     fixtures = _filter_fixtures_for_dashboard(
         fixtures,
         category_name=fixture_category,
@@ -1480,7 +1488,7 @@ def super_admin_dashboard(
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     player_performances = _safe_dashboard_value(
         lambda: get_player_performances(db),
-        {"scorers": [], "assisters": []},
+        {"players": [], "scorers": [], "assisters": []},
     )
     notifications = _safe_dashboard_value(
         lambda: get_notifications_for_user(db, user.user_id, limit=12),
@@ -1868,7 +1876,7 @@ def team_admin_dashboard(
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     player_performances = _safe_dashboard_value(
         lambda: get_player_performances(db, team_ids=own_team_ids),
-        {"scorers": [], "assisters": []},
+        {"players": [], "scorers": [], "assisters": []},
     )
     notifications = _safe_dashboard_value(
         lambda: get_notifications_for_user(db, team_admin.user_id, limit=12),
@@ -1900,6 +1908,7 @@ def team_admin_dashboard(
             "approved_transfers_for_unregistration": approved_transfers_for_unregistration,
             "transfer_status": TransferStatus,
             "fixtures": fixtures,
+            "played_fixtures": played_fixtures,
             "filtered_fixtures": filtered_fixtures,
             "fixture_filters": {
                 "category": fixture_category,
@@ -2027,7 +2036,7 @@ def export_team_admin_performances(
     ]
     performances = _safe_dashboard_value(
         lambda: get_player_performances(db, team_ids=team_ids),
-        {"scorers": [], "assisters": []},
+        {"players": [], "scorers": [], "assisters": []},
     )
     for key in ("scorers", "assisters"):
         performances[key] = [
@@ -2143,7 +2152,7 @@ def export_super_admin_performances(
     _require_super_admin(request, db)
     player_performances = _safe_dashboard_value(
         lambda: get_player_performances(db),
-        {"scorers": [], "assisters": []},
+        {"players": [], "scorers": [], "assisters": []},
     )
     for key in ("scorers", "assisters"):
         player_performances[key] = [
