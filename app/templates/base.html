@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}?v=20260709-2">
     <script src="{{ url_for('static', path='/js/dashboard.js') }}?v=20260709-2" defer></script>
   </head>
-  <body>
+  <body data-app-mode="{{ app_mode }}">
     {% set is_team_admin_home = app_mode == 'team_admin' and request.url.path == '/' %}
     <div class="loading-overlay" data-loading-overlay>
       <div class="loading-ring">

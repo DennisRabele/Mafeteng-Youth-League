@@ -1038,7 +1038,10 @@
 
           if (resultFixtureSelect) {
             updateResultFixtureSummary();
-            resultFixtureSelect.addEventListener('change', updateResultFixtureSummary);
+            resultFixtureSelect.addEventListener('change', () => {
+              updateResultFixtureSummary();
+              syncResultGoalRowsFromScores();
+            });
           }
           if (resultHomeScore) {
             resultHomeScore.addEventListener('input', syncResultGoalRowsFromScores);
