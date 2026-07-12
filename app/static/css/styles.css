@@ -1660,9 +1660,22 @@ body[data-app-mode="team_admin"] .transfer-list article small {
   gap: 12px;
 }
 
+.result-team-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.result-team-column {
+  display: grid;
+  gap: 14px;
+}
+
 .result-goal-block {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 196, 0, 0.14);
+  background:
+    linear-gradient(180deg, rgba(8, 8, 8, 0.98), rgba(18, 18, 18, 0.96)),
+    radial-gradient(circle at top right, rgba(255, 196, 0, 0.12), transparent 40%);
+  border: 1px solid rgba(255, 196, 0, 0.18);
   border-radius: 14px;
   padding: 14px;
 }
@@ -1682,18 +1695,23 @@ body[data-app-mode="team_admin"] .transfer-list article small {
   text-transform: uppercase;
 }
 
+.result-goal-block__head .section-copy {
+  margin-bottom: 0;
+  max-width: 100%;
+}
+
 .result-goal-rows {
   display: grid;
   gap: 12px;
 }
 
 .result-goal-row {
-  background: rgba(0, 0, 0, 0.26);
-  border: 1px solid rgba(255, 196, 0, 0.12);
+  background: rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(255, 196, 0, 0.14);
   border-radius: 12px;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(90px, 0.8fr) minmax(140px, 1.2fr) minmax(140px, 1fr) minmax(140px, 1.2fr);
+  grid-template-columns: minmax(100px, 0.9fr) minmax(140px, 1.2fr) minmax(140px, 1fr) minmax(140px, 1.2fr);
   padding: 12px;
 }
 
@@ -1711,6 +1729,10 @@ body[data-app-mode="team_admin"] .transfer-list article small {
 .result-goal-row input,
 .result-goal-row select {
   min-width: 0;
+}
+
+.result-goal-block--assist .result-goal-row {
+  grid-template-columns: minmax(100px, 1fr) minmax(180px, 2fr);
 }
 
 .page-context {
@@ -2218,6 +2240,10 @@ td {
     scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+  }
+
+  .result-team-grid {
+    grid-template-columns: 1fr;
   }
 
   .result-goal-row {
