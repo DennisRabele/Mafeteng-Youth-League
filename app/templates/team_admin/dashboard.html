@@ -1474,8 +1474,8 @@
               window.setTimeout(dismissDashboardNotice, 5000);
             }
             const filterSelect = document.querySelector('[data-dashboard-category-filter="league-tables"]');
-            if (filterSelect) {
-              filterDashboardPanels('league-tables', filterSelect.value, null);
+            if (filterSelect && window.filterDashboardPanels) {
+              window.filterDashboardPanels('league-tables', filterSelect.value, null);
             }
           });
         </script>
