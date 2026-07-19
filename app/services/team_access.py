@@ -6,6 +6,24 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import ApprovalStatus, Team, TeamAdmin
 
 
+def _backfill_missing_team_codes(db: Session, teams: list[Team]) -> None:
+    missing_codes = [
+        team
+        for team in teams
+        if team.status == ApprovalStatus.APPROVED.value and not team.team_code
+    ]
+    if not missing_codes:
+        return
+
+    from app.services.registration import generate_team_code
+
+    for team in sorted(missing_codes, key=lambda item: item.team_id):
+        team.team_code = generate_team_code(db, team)
+        db.flush()
+
+    db.commit()
+
+
 def load_team_admin_teams(db: Session, team_admin_id: int) -> list[Team]:
     teams_by_id: dict[int, Team] = {}
 
@@ -28,7 +46,9 @@ def load_team_admin_teams(db: Session, team_admin_id: int) -> list[Team]:
         if assigned_team:
             teams_by_id[assigned_team.team_id] = assigned_team
 
-    return list(teams_by_id.values())
+    teams = list(teams_by_id.values())
+    _backfill_missing_team_codes(db, teams)
+    return teams
 
 
 def load_team_admin_approved_teams(db: Session, team_admin_id: int) -> list[Team]:

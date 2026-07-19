@@ -271,6 +271,42 @@ def test_approved_team_admins_can_see_their_linked_team_code_and_access():
     assert colleague_teams[0].team_code == team.team_code
 
 
+def test_approved_team_codes_are_backfilled_for_legacy_records():
+    db = make_session()
+    category = seed_category(db)
+
+    admin = create_team_admin_registration(
+        db,
+        full_name="Legacy Admin",
+        team_name="Legacy Club",
+        email="legacy@example.test",
+        password="Password123",
+        national_id="NID-LEGACY",
+        phone="+26650000018",
+        photo_path="/uploads/admin-photos/legacy.png",
+    )
+    admin = approve_team_admin(db, admin.team_admin_id)
+    team = register_team(
+        db,
+        team_admin_id=admin.team_admin_id,
+        team_name="Legacy Club",
+        category_id=category.category_id,
+        contact_information="+26650000019",
+        team_address="Legacy Road",
+        training_ground="Legacy Training",
+        home_ground="Legacy Ground",
+        logo="/uploads/team-logos/legacy-club.png",
+    )
+    team = approve_team(db, team.team_id)
+    team.team_code = None
+    db.commit()
+
+    approved_teams = load_team_admin_approved_teams(db, admin.team_admin_id)
+    assert len(approved_teams) == 1
+    assert approved_teams[0].team_code is not None
+    assert approved_teams[0].team_code.endswith("MDL")
+
+
 def test_team_admin_limit_increases_to_seven_per_team():
     db = make_session()
     category = seed_category(db)
