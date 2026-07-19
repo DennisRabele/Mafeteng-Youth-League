@@ -2291,6 +2291,62 @@ def submit_result_route(
     return _redirect("/team-admin/dashboard#results")
 
 
+def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, object]:
+    fixture = db.scalar(
+        select(Fixture)
+        .options(
+            selectinload(Fixture.category),
+            selectinload(Fixture.home_team),
+            selectinload(Fixture.away_team),
+        )
+        .where(Fixture.fixture_id == fixture_id)
+    )
+    if not fixture or not fixture.category or not fixture.home_team or not fixture.away_team:
+        raise RegistrationError("Fixture was not found.")
+
+    category_name = (fixture.category.category_name or "").strip()
+    if not category_name:
+        raise RegistrationError("Fixture category was not found.")
+
+    normalized_category = category_name.casefold()
+
+    def _load_team_players(team_id: int) -> list[dict[str, object]]:
+        players = db.scalars(
+            select(Player)
+            .options(selectinload(Player.team))
+            .where(
+                Player.team_id == team_id,
+                Player.status == ApprovalStatus.APPROVED.value,
+                Player.is_on_loan.is_(False),
+                func.lower(func.trim(Player.age_group)) == normalized_category,
+            )
+            .order_by(Player.full_name.asc(), Player.player_id.asc())
+        ).all()
+        return [
+            {
+                "player_id": player.player_id,
+                "player_name": player.full_name,
+                "age_group": player.age_group,
+            }
+            for player in players
+        ]
+
+    return {
+        "fixture_id": fixture.fixture_id,
+        "category_name": category_name,
+        "home_team": {
+            "team_id": fixture.home_team.team_id,
+            "team_name": fixture.home_team.team_name,
+        },
+        "away_team": {
+            "team_id": fixture.away_team.team_id,
+            "team_name": fixture.away_team.team_name,
+        },
+        "home_players": _load_team_players(fixture.home_team_id),
+        "away_players": _load_team_players(fixture.away_team_id),
+    }
+
+
 @router.post("/super-admin/results/{submission_id}/verify")
 def verify_result_route(
     submission_id: int,
@@ -2320,6 +2376,15 @@ def verify_result_route(
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
     return _redirect("/super-admin#results")
+
+
+@router.get("/api/team-admin/result-players")
+def team_admin_result_players(request: Request, fixture_id: int, db: Session = Depends(get_db)):
+    _require_team_admin(request, db)
+    try:
+        return _load_result_fixture_players(db, fixture_id)
+    except RegistrationError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post("/notifications/{notification_id}/read")

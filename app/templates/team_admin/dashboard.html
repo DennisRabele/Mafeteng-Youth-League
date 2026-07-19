@@ -863,13 +863,20 @@
             ['header from corner kick', 'Header from corner kick'],
           ];
 
+          const resultPlayerState = {
+            fixtureId: '',
+            loading: false,
+            homePlayers: [],
+            awayPlayers: [],
+          };
+          let resultPlayersRequestToken = 0;
+
           function getResultEntryState() {
             return {
               resultForm: document.querySelector('[data-result-form]'),
               resultFixtureSelect: document.getElementById('result-fixture-select'),
               resultHomeScore: document.getElementById('result-home-score'),
               resultAwayScore: document.getElementById('result-away-score'),
-              resultSuggestions: document.getElementById('result-player-suggestions'),
               resultScorerNames: document.getElementById('result-scorer-names'),
               resultGoalTypes: document.getElementById('result-goal-types'),
               resultAssistNames: document.getElementById('result-assist-names'),
@@ -890,6 +897,69 @@
             return getResultEntryState().resultGoalSections[side]?.[kind] || null;
           }
 
+          function getResultPlayersForSide(side) {
+            return side === 'home' ? resultPlayerState.homePlayers : resultPlayerState.awayPlayers;
+          }
+
+          function getResultPlayerPlaceholder(side, kind) {
+            if (!resultPlayerState.fixtureId) {
+              return 'Select a played fixture first';
+            }
+            if (resultPlayerState.loading) {
+              return 'Loading eligible players...';
+            }
+            const sideLabel = side === 'home' ? 'home team' : 'away team';
+            if (!getResultPlayersForSide(side).length) {
+              return 'No eligible players found';
+            }
+            return kind === 'scorer'
+              ? `Select ${sideLabel} player`
+              : `Optional: select ${sideLabel} player`;
+          }
+
+          function populateResultPlayerSelect(select, side, kind) {
+            if (!select) {
+              return;
+            }
+            const currentValue = select.value;
+            const players = getResultPlayersForSide(side);
+            const placeholder = getResultPlayerPlaceholder(side, kind);
+            select.innerHTML = '';
+            const placeholderOption = document.createElement('option');
+            placeholderOption.value = '';
+            placeholderOption.textContent = placeholder;
+            select.appendChild(placeholderOption);
+            players.forEach((player) => {
+              const option = document.createElement('option');
+              option.value = player.player_name;
+              option.textContent = player.player_name;
+              select.appendChild(option);
+            });
+            select.disabled = !resultPlayerState.fixtureId || resultPlayerState.loading || players.length === 0;
+            if (currentValue && players.some((player) => player.player_name === currentValue)) {
+              select.value = currentValue;
+            } else {
+              select.value = '';
+            }
+          }
+
+          function refreshResultPlayerSelects() {
+            const { resultGoalSections } = getResultEntryState();
+            Object.entries(resultGoalSections).forEach(([side, section]) => {
+              Object.entries(section).forEach(([, container]) => {
+                if (!container) {
+                  return;
+                }
+                container.querySelectorAll('select[data-result-scorer], select[data-result-assist]').forEach((select) => {
+                  const row = select.closest('[data-result-goal-row]');
+                  const kind = select.hasAttribute('data-result-scorer') ? 'scorer' : 'assist';
+                  const rowSide = row?.dataset.resultSide || side;
+                  populateResultPlayerSelect(select, rowSide, kind);
+                });
+              });
+            });
+          }
+
           function buildResultGoalRow(side, kind, index) {
             const row = document.createElement('div');
             row.className = 'result-goal-row';
@@ -902,7 +972,9 @@
               ? `
                 <div class="result-goal-row__title">${sideLabel} ${titleLabel} ${index + 1}</div>
                 <label>Scorer
-                  <input type="text" data-result-scorer list="result-player-suggestions" placeholder="Type player name" autocomplete="off">
+                  <select data-result-scorer required>
+                    <option value="">${getResultPlayerPlaceholder(side, kind)}</option>
+                  </select>
                 </label>
                 <label>Goal type
                   <select data-result-goal-type>
@@ -913,7 +985,9 @@
               : `
                 <div class="result-goal-row__title">${sideLabel} ${titleLabel} ${index + 1}</div>
                 <label>Assister
-                  <input type="text" data-result-assist list="result-player-suggestions" placeholder="Type player name" autocomplete="off">
+                  <select data-result-assist>
+                    <option value="">${getResultPlayerPlaceholder(side, kind)}</option>
+                  </select>
                 </label>
               `;
             return row;
@@ -937,11 +1011,16 @@
                 title.textContent = `${sideLabel} ${titleLabel} ${index + 1}`;
               }
             });
+            refreshResultPlayerSelects();
           }
 
           function addResultGoalRow(side, kind, event) {
             if (event) {
               event.preventDefault();
+            }
+            if (!resultPlayerState.fixtureId) {
+              alert('Select a played fixture first so the player list can be loaded.');
+              return;
             }
             const container = getResultGoalContainer(side, kind);
             if (!container) {
@@ -952,32 +1031,46 @@
             lastRow?.querySelector('[data-result-scorer], [data-result-assist]')?.focus?.();
           }
 
-          async function updateResultPlayerSuggestions(searchTerm) {
-            const { resultSuggestions } = getResultEntryState();
-            if (!resultSuggestions) {
-              return;
-            }
-            if (!searchTerm || searchTerm.length < 2) {
-              resultSuggestions.innerHTML = '';
+          async function loadResultFixturePlayers(fixtureId) {
+            const normalizedFixtureId = String(fixtureId || '');
+            resultPlayersRequestToken += 1;
+            const requestToken = resultPlayersRequestToken;
+            resultPlayerState.fixtureId = normalizedFixtureId;
+            resultPlayerState.loading = Boolean(normalizedFixtureId);
+            resultPlayerState.homePlayers = [];
+            resultPlayerState.awayPlayers = [];
+            refreshResultPlayerSelects();
+            if (!normalizedFixtureId) {
               return;
             }
             try {
-              const response = await fetch(`/api/search-players-by-name?name=${encodeURIComponent(searchTerm)}`);
+              const response = await fetch(`/api/team-admin/result-players?fixture_id=${encodeURIComponent(normalizedFixtureId)}`);
+              if (!response.ok) {
+                throw new Error(`Request failed with ${response.status}`);
+              }
               const data = await response.json();
-              resultSuggestions.innerHTML = '';
-              data.players.forEach((player) => {
-                const option = document.createElement('option');
-                option.value = player.player_name;
-                option.label = `${player.player_name} - ${player.team_name} (${player.age_group})`;
-                resultSuggestions.appendChild(option);
-              });
+              if (requestToken !== resultPlayersRequestToken) {
+                return;
+              }
+              resultPlayerState.homePlayers = Array.isArray(data.home_players) ? data.home_players : [];
+              resultPlayerState.awayPlayers = Array.isArray(data.away_players) ? data.away_players : [];
             } catch (error) {
-              console.error('Error searching result players:', error);
+              console.error('Error loading result players:', error);
+              if (requestToken === resultPlayersRequestToken) {
+                alert('Could not load eligible players for this fixture.');
+              }
+            } finally {
+              if (requestToken !== resultPlayersRequestToken) {
+                return;
+              }
+              resultPlayerState.loading = false;
+              refreshResultPlayerSelects();
             }
           }
 
-          function updateResultFixtureSummary() {
-            void getResultEntryState().resultFixtureSelect;
+          async function updateResultFixtureSummary() {
+            const { resultFixtureSelect } = getResultEntryState();
+            await loadResultFixturePlayers(resultFixtureSelect?.value || '');
           }
 
           function collectResultGoalRows(event) {
@@ -1112,6 +1205,7 @@
             ensureResultGoalRows('away', 'scorer', awayGoals);
             ensureResultGoalRows('home', 'assist', homeGoals);
             ensureResultGoalRows('away', 'assist', awayGoals);
+            refreshResultPlayerSelects();
           }
 
           function initResultEntryControls() {
@@ -1123,26 +1217,12 @@
               return;
             }
             window.__resultEntryControlsBound = true;
-            state.resultFixtureSelect.addEventListener('change', () => {
-              updateResultFixtureSummary();
+            state.resultFixtureSelect.addEventListener('change', async () => {
+              await updateResultFixtureSummary();
               syncResultGoalRowsFromScores();
             });
             state.resultHomeScore.addEventListener('input', syncResultGoalRowsFromScores);
             state.resultAwayScore.addEventListener('input', syncResultGoalRowsFromScores);
-            Object.values(state.resultGoalSections).forEach((section) => {
-              Object.values(section).forEach((container) => {
-                if (!container) {
-                  return;
-                }
-                container.addEventListener('input', (event) => {
-                  const input = event.target;
-                  if (!input.matches('[data-result-scorer], [data-result-assist]')) {
-                    return;
-                  }
-                  updateResultPlayerSuggestions(input.value.trim());
-                });
-              });
-            });
             state.resultForm.addEventListener('submit', (event) => {
               syncResultGoalRowsFromScores();
               if (!collectResultGoalRows(event)) {
@@ -1150,6 +1230,7 @@
               }
             });
             window.addResultGoalRow = addResultGoalRow;
+            refreshResultPlayerSelects();
           }
 
           if (document.readyState === 'loading') {
@@ -1770,6 +1851,7 @@
                 <option value="{{ fixture.fixture_id }}" data-played-on="{{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }}" data-home="{{ fixture.home_team.team_name }}" data-away="{{ fixture.away_team.team_name }}">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</option>
               {% endfor %}
             </select>
+            <p class="section-copy">Choose the fixture first so scorer and assist dropdowns load the eligible players for that match category.</p>
           </label>
           <div class="form-grid two">
             <label>Home score
@@ -1828,7 +1910,6 @@
           <input type="hidden" name="scorer_names_text" id="result-scorer-names">
           <input type="hidden" name="goal_types_text" id="result-goal-types">
           <input type="hidden" name="assist_names_text" id="result-assist-names">
-          <datalist id="result-player-suggestions"></datalist>
           <div class="form-actions wide">
             <button class="button button-success" type="submit">Save Result</button>
           </div>
