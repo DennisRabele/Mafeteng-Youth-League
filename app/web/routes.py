@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlencode
@@ -2308,7 +2309,12 @@ def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, obje
     if not category_name:
         raise RegistrationError("Fixture category was not found.")
 
-    normalized_category = category_name.casefold()
+    category_age_group_match = re.search(r"\bU\d{2}\b", category_name, re.IGNORECASE)
+    category_age_group = (
+        category_age_group_match.group(0).upper()
+        if category_age_group_match
+        else category_name.strip().upper()
+    )
 
     def _load_team_players(team_id: int) -> list[dict[str, object]]:
         players = db.scalars(
@@ -2318,7 +2324,10 @@ def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, obje
                 Player.team_id == team_id,
                 Player.status == ApprovalStatus.APPROVED.value,
                 Player.is_on_loan.is_(False),
-                func.lower(func.trim(Player.age_group)) == normalized_category,
+                or_(
+                    func.upper(func.trim(Player.age_group)) == category_age_group,
+                    func.upper(func.trim(Player.age_group)).like(f"%{category_age_group}%"),
+                ),
             )
             .order_by(Player.full_name.asc(), Player.player_id.asc())
         ).all()

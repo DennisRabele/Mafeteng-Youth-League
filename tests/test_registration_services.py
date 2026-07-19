@@ -7,6 +7,8 @@ from app.db.base import Base
 from app.models import (
     ApprovalStatus,
     Category,
+    Fixture,
+    Match,
     Player,
     PlayerRegistrationRequest,
     Season,
@@ -40,6 +42,8 @@ from app.services.registration import (
     verify_login_code,
 )
 from app.services.league import create_fixture
+from app.services.league import submit_match_result
+from app.web.routes import _load_result_fixture_players
 
 
 def make_session():
@@ -602,6 +606,242 @@ def test_fixture_creation_rejects_category_mismatches():
         assert "Selected teams must belong to the chosen category." in str(exc)
     else:
         raise AssertionError("Expected the category mismatch to be rejected.")
+
+
+def test_result_players_endpoint_returns_only_fixture_team_players_for_the_category():
+    db = make_session()
+    category = seed_category(db)
+
+    home_admin = create_team_admin_registration(
+        db,
+        full_name="Home Admin",
+        team_name="Blue Eagles",
+        email="home-result@example.test",
+        password="Password123",
+        national_id="NID-HOME-RESULT",
+        phone="+26650000030",
+        photo_path="/uploads/admin-photos/home-result.png",
+    )
+    away_admin = create_team_admin_registration(
+        db,
+        full_name="Away Admin",
+        team_name="Red Warriors",
+        email="away-result@example.test",
+        password="Password123",
+        national_id="NID-AWAY-RESULT",
+        phone="+26650000031",
+        photo_path="/uploads/admin-photos/away-result.png",
+    )
+    home_admin = approve_team_admin(db, home_admin.team_admin_id)
+    away_admin = approve_team_admin(db, away_admin.team_admin_id)
+
+    home_team = register_team(
+        db,
+        team_admin_id=home_admin.team_admin_id,
+        team_name="Blue Eagles",
+        category_id=category.category_id,
+        contact_information="+26650000032",
+        team_address="Blue Road",
+        training_ground="Blue Training",
+        home_ground="Blue Stadium",
+        logo="/uploads/team-logos/blue-eagles.png",
+    )
+    away_team = register_team(
+        db,
+        team_admin_id=away_admin.team_admin_id,
+        team_name="Red Warriors",
+        category_id=category.category_id,
+        contact_information="+26650000033",
+        team_address="Red Road",
+        training_ground="Red Training",
+        home_ground="Red Stadium",
+        logo="/uploads/team-logos/red-warriors.png",
+    )
+    home_team = approve_team(db, home_team.team_id)
+    away_team = approve_team(db, away_team.team_id)
+
+    approve_player(
+        db,
+        register_player(
+            db,
+            team_id=home_team.team_id,
+            full_name="Home Striker",
+            gender="Male",
+            dob=years_ago(17),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            parent_name="Parent Home",
+            parent_contact="+26650000034",
+            school_name=None,
+            position="Forward",
+            agreement_form_path="/uploads/player-agreements/home-striker.pdf",
+            photo_path=None,
+            documents=[],
+            registration_period=1,
+        ).player_id,
+    )
+    approve_player(
+        db,
+        register_player(
+            db,
+            team_id=home_team.team_id,
+            full_name="Home Support",
+            gender="Male",
+            dob=years_ago(17),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            parent_name="Parent Home Support",
+            parent_contact="+26650000035",
+            school_name=None,
+            position="Midfielder",
+            agreement_form_path="/uploads/player-agreements/home-support.pdf",
+            photo_path=None,
+            documents=[],
+            registration_period=1,
+        ).player_id,
+    )
+    approve_player(
+        db,
+        register_player(
+            db,
+            team_id=home_team.team_id,
+            full_name="Home Younger Player",
+            gender="Male",
+            dob=years_ago(17),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            parent_name="Parent Younger",
+            parent_contact="+26650000038",
+            school_name=None,
+            position="Defender",
+            agreement_form_path="/uploads/player-agreements/home-younger.pdf",
+            photo_path=None,
+            documents=[],
+            registration_period=1,
+        ).player_id,
+    )
+    db.add(
+        Player(
+            team_id=home_team.team_id,
+            parent_id=None,
+            full_name="Home U15 Outsider",
+            gender="Male",
+            dob=years_ago(15),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            school_name=None,
+            position="Defender",
+            photo_path=None,
+            age_group="U15",
+            registration_type="new",
+            registration_period=1,
+            agreement_form_path="/uploads/player-agreements/home-outsider.pdf",
+            player_code="TEST-U15",
+            rejection_reason=None,
+            status=ApprovalStatus.APPROVED.value,
+            approved_by_super_admin_id=None,
+            approved_at=datetime.utcnow(),
+            registration_reminder_sent_at=None,
+            is_on_loan=False,
+            original_team_id=None,
+            loan_end_date=None,
+        )
+    )
+    approve_player(
+        db,
+        register_player(
+            db,
+            team_id=away_team.team_id,
+            full_name="Away Striker",
+            gender="Male",
+            dob=years_ago(17),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            parent_name="Parent Away",
+            parent_contact="+26650000036",
+            school_name=None,
+            position="Forward",
+            agreement_form_path="/uploads/player-agreements/away-striker.pdf",
+            photo_path=None,
+            documents=[],
+            registration_period=1,
+        ).player_id,
+    )
+    approve_player(
+        db,
+        register_player(
+            db,
+            team_id=away_team.team_id,
+            full_name="Away Support",
+            gender="Male",
+            dob=years_ago(17),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            parent_name="Parent Away Support",
+            parent_contact="+26650000037",
+            school_name=None,
+            position="Midfielder",
+            agreement_form_path="/uploads/player-agreements/away-support.pdf",
+            photo_path=None,
+            documents=[],
+            registration_period=1,
+        ).player_id,
+    )
+
+    fixture = Fixture(
+        season_id=category.season_id,
+        category_id=category.category_id,
+        home_team_id=home_team.team_id,
+        away_team_id=away_team.team_id,
+        fixture_date=datetime.utcnow() - timedelta(days=1),
+        venue="Test Ground",
+        status="completed",
+    )
+    db.add(fixture)
+    db.flush()
+    db.add(
+        Match(
+            fixture_id=fixture.fixture_id,
+            match_date=fixture.fixture_date,
+            status="completed",
+            home_score=1,
+            away_score=1,
+        )
+    )
+    db.commit()
+
+    payload = _load_result_fixture_players(db, fixture.fixture_id)
+    assert payload["category_name"] == "Male U17"
+    assert [player["player_name"] for player in payload["home_players"]] == [
+        "Home Striker",
+        "Home Support",
+        "Home Younger Player",
+    ]
+    assert [player["player_name"] for player in payload["away_players"]] == [
+        "Away Striker",
+        "Away Support",
+    ]
+
+    submission = submit_match_result(
+        db,
+        team_admin_id=home_admin.team_admin_id,
+        fixture_id=fixture.fixture_id,
+        home_score=1,
+        away_score=1,
+        scorer_names_text="Home Striker\nAway Striker",
+        goal_types_text="penalty\nfreekick",
+        assist_names_text="Home Support\nAway Support",
+    )
+    assert submission.status == ApprovalStatus.PENDING.value
+    assert submission.scorer_names_text == "Home Striker\nAway Striker"
+    assert submission.goal_types_text == "penalty\nfreekick"
+    assert submission.assist_names_text == "Home Support\nAway Support"
 
 
 def test_rejection_reasons_are_required_and_saved():
