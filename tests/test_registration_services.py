@@ -13,6 +13,7 @@ from app.models import (
     PlayerRegistrationRequest,
     Season,
     SuperAdmin,
+    TeamAdmin,
     TransferStatus,
 )
 from app.services.registration import (
@@ -40,6 +41,10 @@ from app.services.registration import (
     suggested_registration_period,
     verify_email_code,
     verify_login_code,
+)
+from app.services.team_access import (
+    load_team_admin_approved_team_ids,
+    load_team_admin_approved_teams,
 )
 from app.services.league import create_fixture
 from app.services.league import submit_match_result
@@ -208,6 +213,59 @@ def test_additional_team_admin_can_register_with_team_code_only():
 
     assert second_admin.requested_team_name == "Blue Eagles"
     assert second_admin.team_id == team.team_id
+
+
+def test_approved_team_admins_can_see_their_linked_team_code_and_access():
+    db = make_session()
+    category = seed_category(db)
+
+    first_admin = create_team_admin_registration(
+        db,
+        full_name="Primary Admin",
+        team_name="North Stars",
+        email="primary@example.test",
+        password="Password123",
+        national_id="NID-PRIMARY",
+        phone="+26650000013",
+        photo_path="/uploads/admin-photos/primary.png",
+    )
+    first_admin = approve_team_admin(db, first_admin.team_admin_id)
+    team = register_team(
+        db,
+        team_admin_id=first_admin.team_admin_id,
+        team_name="North Stars",
+        category_id=category.category_id,
+        contact_information="+26650000014",
+        team_address="North Road",
+        training_ground="North Training",
+        home_ground="North Ground",
+        logo="/uploads/team-logos/north-stars.png",
+    )
+    team = approve_team(db, team.team_id)
+
+    assert db.get(TeamAdmin, first_admin.team_admin_id).team_id == team.team_id
+    approved_teams = load_team_admin_approved_teams(db, first_admin.team_admin_id)
+    assert [item.team_id for item in approved_teams] == [team.team_id]
+    assert load_team_admin_approved_team_ids(db, first_admin.team_admin_id) == [team.team_id]
+
+    colleague_admin = create_team_admin_registration(
+        db,
+        full_name="Colleague Admin",
+        team_name=None,
+        email="colleague@example.test",
+        password="Password123",
+        national_id="NID-COLLEAGUE",
+        phone="+26650000015",
+        photo_path="/uploads/admin-photos/colleague.png",
+        team_code=team.team_code,
+    )
+    assert colleague_admin.team_id == team.team_id
+
+    colleague_admin = approve_team_admin(db, colleague_admin.team_admin_id)
+    assert load_team_admin_approved_team_ids(db, colleague_admin.team_admin_id) == [team.team_id]
+    colleague_teams = load_team_admin_approved_teams(db, colleague_admin.team_admin_id)
+    assert len(colleague_teams) == 1
+    assert colleague_teams[0].team_code == team.team_code
 
 
 def test_player_registration_expiry_reminder_is_sent_once():

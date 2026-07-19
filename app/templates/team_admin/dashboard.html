@@ -2299,8 +2299,19 @@
           <div><dt>National ID</dt><dd>{{ team_admin.national_id }}</dd></div>
           <div><dt>Team Name</dt><dd>{{ team_admin.requested_team_name }}</dd></div>
           <div><dt>Team Admin ID</dt><dd>{{ team_admin.admin_code or 'Pending approval' }}</dd></div>
-          {% if approved_team and approved_team.team_code %}
-            <div><dt>Team Code</dt><dd>{{ approved_team.team_code }}</dd></div>
+          {% if approved_teams %}
+            <div style="grid-column: 1 / -1;">
+              <dt style="margin-bottom: 0.5rem;">Club Access</dt>
+              <div style="display: grid; gap: 0.75rem;">
+                {% for team in approved_teams %}
+                  <article class="panel" style="padding: 1rem;">
+                    <strong>{{ team.team_name }}</strong>
+                    <div style="margin-top: 0.4rem; color: #666;">{{ team.category.category_name if team.category else 'Uncategorized' }}</div>
+                    <div style="margin-top: 0.4rem;"><span class="muted">Team Code:</span> {{ team.team_code or 'Pending code' }}</div>
+                  </article>
+                {% endfor %}
+              </div>
+            </div>
           {% elif team_admin.status == 'approved' %}
             <div><dt>Team Code</dt><dd>Team code will appear after the club approval is linked to a team record.</dd></div>
           {% endif %}

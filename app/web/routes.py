@@ -82,6 +82,13 @@ from app.services.registration import (
     verify_login_code,
     verify_password_recovery_code,
 )
+from app.services.team_access import (
+    load_team_admin_approved_team_ids,
+    load_team_admin_approved_teams,
+    load_team_admin_primary_team,
+    load_team_admin_teams,
+    team_admin_has_access_to_team,
+)
 from app.services.email import (
     EmailDeliveryError,
     send_login_code,
@@ -856,7 +863,7 @@ def team_admin_registration_form(
     resolved_is_first = is_first == "true" if is_first else None
     if re_register and current_user and current_user.team_admin_profile:
         team_admin = current_user.team_admin_profile
-        assigned_team = team_admin.assigned_team
+        assigned_team = load_team_admin_primary_team(db, team_admin.team_admin_id)
         form_data = {
             "full_name": current_user.full_name,
             "team_name": team_admin.requested_team_name,
@@ -1706,21 +1713,15 @@ def team_admin_welcome(request: Request, db: Session = Depends(get_db)):
 @router.get("/team-admin/account")
 def team_admin_account(request: Request, db: Session = Depends(get_db)):
     team_admin = _require_team_admin_account(request, db)
-    approved_team = db.scalar(
-        select(Team)
-        .options(selectinload(Team.category))
-        .where(
-            Team.team_admin_id == team_admin.team_admin_id,
-            Team.status == ApprovalStatus.APPROVED.value,
-        )
-        .order_by(Team.team_id.desc())
-    )
+    approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
+    approved_team = approved_teams[0] if approved_teams else None
     return _render(
         request,
         "team_admin/account.html",
         {
             "current_user": team_admin.user,
             "team_admin": team_admin,
+            "approved_teams": approved_teams,
             "approved_team": approved_team,
         },
     )
@@ -1741,22 +1742,15 @@ def team_admin_dashboard(
     restore_expired_loans(db)
     process_player_registration_lifecycle(db)
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
-    teams = db.scalars(
-        select(Team)
-        .options(selectinload(Team.category))
-        .where(Team.team_admin_id == team_admin.team_admin_id)
-        .order_by(Team.team_id.desc())
-    ).all()
-    approved_teams = [
-        team for team in teams if team.status == ApprovalStatus.APPROVED.value
-    ]
+    teams = load_team_admin_teams(db, team_admin.team_admin_id)
+    approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
     approved_team = approved_teams[0] if approved_teams else None
-    own_team_ids = [team.team_id for team in teams]
+    approved_team_ids = [team.team_id for team in approved_teams]
     players = db.scalars(
         select(Player)
         .options(selectinload(Player.team))
         .join(Team, Player.team_id == Team.team_id)
-        .where(Team.team_admin_id == team_admin.team_admin_id)
+        .where(Team.team_id.in_(approved_team_ids))
         .where(Player.status != "transferred")
         .order_by(Player.player_id.desc())
     ).all()
@@ -1769,7 +1763,7 @@ def team_admin_dashboard(
         select(PlayerRegistrationRequest)
         .where(
             PlayerRegistrationRequest.registration_type == "renewal",
-            PlayerRegistrationRequest.team_id.in_(own_team_ids),
+            PlayerRegistrationRequest.team_id.in_(approved_team_ids),
         )
         .options(
             selectinload(PlayerRegistrationRequest.player).selectinload(Player.team),
@@ -1782,12 +1776,11 @@ def team_admin_dashboard(
     transfer_target_teams = db.scalars(
         select(Team)
         .options(selectinload(Team.category))
-        .where(
-            Team.team_admin_id != team_admin.team_admin_id,
-            Team.status == ApprovalStatus.APPROVED.value,
-        )
+        .where(Team.status == ApprovalStatus.APPROVED.value)
         .order_by(Team.team_name)
     ).all()
+    if approved_team_ids:
+        transfer_target_teams = [team for team in transfer_target_teams if team.team_id not in approved_team_ids]
     all_teams = db.scalars(
         select(Team)
         .options(selectinload(Team.category))
@@ -1815,8 +1808,8 @@ def team_admin_dashboard(
         .where(
             PlayerTransferRequest.requested_by_team_admin_id != team_admin.team_admin_id,
             or_(
-                PlayerTransferRequest.from_team_id.in_(own_team_ids),
-                PlayerTransferRequest.to_team_id.in_(own_team_ids),
+                PlayerTransferRequest.from_team_id.in_(approved_team_ids),
+                PlayerTransferRequest.to_team_id.in_(approved_team_ids),
             ),
         )
         .order_by(PlayerTransferRequest.transfer_id.desc())
@@ -1831,7 +1824,7 @@ def team_admin_dashboard(
             selectinload(PlayerTransferRequest.to_team),
         )
         .where(
-            PlayerTransferRequest.to_team_id.in_(own_team_ids),
+            PlayerTransferRequest.to_team_id.in_(approved_team_ids),
             PlayerTransferRequest.status == ApprovalStatus.APPROVED.value,
             PlayerTransferRequest.completed_at.is_(None),
         )
@@ -1847,7 +1840,7 @@ def team_admin_dashboard(
             selectinload(PlayerTransferRequest.to_team),
         )
         .where(
-            PlayerTransferRequest.from_team_id.in_(own_team_ids),
+            PlayerTransferRequest.from_team_id.in_(approved_team_ids),
             PlayerTransferRequest.status == ApprovalStatus.APPROVED.value,
             PlayerTransferRequest.completed_at.is_(None),
         )
@@ -1868,7 +1861,7 @@ def team_admin_dashboard(
         if fixture.home_team
         and fixture.away_team
         and fixture.fixture_date <= datetime.utcnow()
-        and (fixture.home_team_id in own_team_ids or fixture.away_team_id in own_team_ids)
+        and (fixture.home_team_id in approved_team_ids or fixture.away_team_id in approved_team_ids)
     ]
     filtered_fixtures = _filter_fixtures_for_dashboard(
         fixtures,
@@ -1878,12 +1871,12 @@ def team_admin_dashboard(
         date_to=fixture_date_to,
     )
     result_submissions = _safe_dashboard_value(
-        lambda: _load_result_submissions(db, team_ids=own_team_ids),
+        lambda: _load_result_submissions(db, team_ids=approved_team_ids),
         [],
     )
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     player_performances = _safe_dashboard_value(
-        lambda: get_player_performances(db, team_ids=own_team_ids),
+        lambda: get_player_performances(db, team_ids=approved_team_ids),
         {"players": [], "scorers": [], "assisters": []},
     )
     notifications = _safe_dashboard_value(
@@ -1943,13 +1936,8 @@ def export_team_admin_fixtures(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    team_ids = [
-        team.team_id
-        for team in db.scalars(
-            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
-        ).all()
-    ]
-    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db), [])
+    team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    fixtures = _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=team_ids), [])
     fixtures = _filter_fixtures_for_dashboard(
         fixtures,
         category_name=fixture_category,
@@ -2007,12 +1995,7 @@ def export_team_admin_results(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    team_ids = [
-        team.team_id
-        for team in db.scalars(
-            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
-        ).all()
-    ]
+    team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
     submissions = _safe_dashboard_value(lambda: _load_result_submissions(db, team_ids=team_ids), [])
     submissions = _filter_result_submissions_by_category(submissions, category)
     filename = f"team_admin_results_{category}.png".replace(" ", "_")
@@ -2036,12 +2019,7 @@ def export_team_admin_performances(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    team_ids = [
-        team.team_id
-        for team in db.scalars(
-            select(Team).where(Team.team_admin_id == team_admin.team_admin_id)
-        ).all()
-    ]
+    team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
     performances = _safe_dashboard_value(
         lambda: get_player_performances(db, team_ids=team_ids),
         {"players": [], "scorers": [], "assisters": []},
@@ -2425,9 +2403,8 @@ def create_team_route(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    is_first_team_registration = not db.scalar(
-        select(Team.team_id).where(Team.team_admin_id == team_admin.team_admin_id, Team.status == ApprovalStatus.APPROVED.value)
-    )
+    approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
+    is_first_team_registration = not approved_teams
     normalized_team_name = (team_name or "").strip()
     normalized_team_code = (team_code or "").strip()
 
@@ -2529,7 +2506,7 @@ def create_player_route(
     
     team_admin = _require_team_admin(request, db)
     team = db.get(Team, team_id)
-    if not team or team.team_admin_id != team_admin.team_admin_id:
+    if not team or not team_admin_has_access_to_team(db, team_admin.team_admin_id, team.team_id):
         return _team_admin_dashboard_redirect(
             section="player-form",
             notice="You can only register players for your own approved teams.",
@@ -2820,21 +2797,18 @@ def request_player_route(
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
     
     # Get the requesting team (to_team)
     if to_team_id:
         to_team = db.scalar(
             select(Team)
             .where(Team.team_id == to_team_id)
-            .where(Team.team_admin_id == team_admin.team_admin_id)
+            .where(Team.team_id.in_(approved_team_ids))
             .where(Team.status == ApprovalStatus.APPROVED.value)
         )
     else:
-        to_team = db.scalar(
-            select(Team)
-            .where(Team.team_admin_id == team_admin.team_admin_id)
-            .where(Team.status == ApprovalStatus.APPROVED.value)
-        )
+        to_team = load_team_admin_primary_team(db, team_admin.team_admin_id)
     
     if not to_team:
         return _render(

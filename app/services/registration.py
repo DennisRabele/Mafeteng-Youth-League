@@ -31,6 +31,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.team_access import load_team_admin_approved_team_ids, load_team_admin_primary_team
 
 
 class RegistrationError(ValueError):
@@ -670,7 +671,7 @@ def approve_team_admin(
     try:
         from app.services.league import create_notification
 
-        assigned_team = team_admin.assigned_team
+        assigned_team = load_team_admin_primary_team(db, team_admin.team_admin_id)
         if assigned_team and assigned_team.team_code:
             approval_message = (
                 "Your Team Admin registration has been approved. "
@@ -815,6 +816,8 @@ def approve_team(
     # Generate team code
     if not team.team_code:
         team.team_code = generate_team_code(db, team)
+    if team.team_admin and team.team_admin.team_id is None:
+        team.team_admin.team_id = team.team_id
     
     team.status = ApprovalStatus.APPROVED.value
     team.rejection_reason = None
@@ -1016,7 +1019,8 @@ def renew_player_registration(
     registration_period: int = 1,
 ) -> PlayerRegistrationRequest:
     player = db.get(Player, player_id)
-    if not player or not player.team or player.team.team_admin_id != team_admin_id:
+    accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
+    if not player or not player.team or player.team_id not in accessible_team_ids:
         raise RegistrationError("You can only renew players from your own teams.")
     if player.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Only approved players can be renewed.")
@@ -1075,11 +1079,12 @@ def request_player_transfer(
 ) -> PlayerTransferRequest:
     player = db.get(Player, player_id)
     to_team = db.get(Team, to_team_id)
-    if not player or not player.team or player.team.team_admin_id != team_admin_id:
+    accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
+    if not player or not player.team or player.team_id not in accessible_team_ids:
         raise RegistrationError("You can only transfer players from your own teams.")
     if not to_team:
         raise RegistrationError("Selected destination team was not found.")
-    if to_team.team_admin_id == team_admin_id:
+    if to_team.team_id in accessible_team_ids:
         raise RegistrationError("Destination team must belong to another Team Admin.")
     transfer_type = _validate_text(transfer_type, field_name="Transfer type")
     player_details = _validate_text(player_details, field_name="Player details")
@@ -1122,15 +1127,16 @@ def request_player_from_team(
     player = db.get(Player, player_id)
     from_team = db.get(Team, from_team_id)
     to_team = db.get(Team, to_team_id)
+    accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
     if not player or not player.team or not from_team or player.team_id != from_team_id:
         raise RegistrationError("Invalid player or player not found in the selected team.")
     if player.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Only approved players can be requested for transfer.")
     if player.is_on_loan:
         raise RegistrationError("This player is currently on loan and cannot be requested.")
-    if not to_team or to_team.team_admin_id != team_admin_id:
+    if not to_team or to_team.team_id not in accessible_team_ids:
         raise RegistrationError("You can only request players for your own approved team.")
-    if from_team.team_admin_id == team_admin_id:
+    if from_team.team_id in accessible_team_ids:
         raise RegistrationError("You cannot request a player from your own team.")
     if from_team.status != ApprovalStatus.APPROVED.value or to_team.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Both teams must be approved before a transfer request can be sent.")
@@ -1185,11 +1191,8 @@ def respond_to_transfer(
     request = db.get(PlayerTransferRequest, transfer_id)
     if not request:
         raise RegistrationError("Transfer request was not found for your team.")
-    if request.requested_by_team_admin_id == request.to_team.team_admin_id:
-        expected_team_admin_id = request.from_team.team_admin_id
-    else:
-        expected_team_admin_id = request.to_team.team_admin_id
-    if expected_team_admin_id != team_admin_id:
+    accessible_team_ids = set(load_team_admin_approved_team_ids(db, team_admin_id))
+    if request.to_team_id not in accessible_team_ids and request.from_team_id not in accessible_team_ids:
         raise RegistrationError("Transfer request was not found for your team.")
     if request.status != ApprovalStatus.PENDING.value:
         raise RegistrationError("This transfer request has already been answered.")
@@ -1220,7 +1223,7 @@ def complete_transfer_registration(
     agreement_form_path: str | None,
 ) -> PlayerTransferRequest:
     request = db.get(PlayerTransferRequest, transfer_id)
-    if not request or request.to_team.team_admin_id != team_admin_id:
+    if not request or request.to_team_id not in set(load_team_admin_approved_team_ids(db, team_admin_id)):
         raise RegistrationError("Transfer request was not found for your team.")
     if request.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError("Transfer must be approved before registration.")
@@ -1592,7 +1595,7 @@ def register_transferred_player(
     
     # Verify requesting team admin is from the receiving team
     to_team = db.get(Team, transfer.to_team_id)
-    if not to_team or to_team.team_admin_id != team_admin_id:
+    if not to_team or to_team.team_id not in set(load_team_admin_approved_team_ids(db, team_admin_id)):
         raise RegistrationError("You can only register transfers for your own team.")
     consent_form_path = _normalize_text(consent_form_path) or None
     if not consent_form_path:
@@ -1687,7 +1690,7 @@ def unregister_transferred_player(
     
     # Verify requesting team admin is from the original team
     from_team = db.get(Team, transfer.from_team_id)
-    if not from_team or from_team.team_admin_id != team_admin_id:
+    if not from_team or from_team.team_id not in set(load_team_admin_approved_team_ids(db, team_admin_id)):
         raise RegistrationError("You can only unregister players from your own team.")
     
     player = transfer.player
