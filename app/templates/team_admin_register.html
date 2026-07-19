@@ -50,7 +50,7 @@
         <input id="team_name_input" name="team_name" value="{{ form_data.team_name if form_data else '' }}" {% if is_first is not false %}required{% endif %}>
         <small style="display:block; margin-top:0.35rem; color:#666;">Use the exact team name from your Team Admin registration.</small>
       </label>
-      <label id="team_code_field" {% if is_first != false %}hidden{% endif %}>Team Code
+      <label id="team_code_field" style="{% if is_first != false %}display:none;{% endif %}">Team Code
         <input id="team_code_input" name="team_code" value="{{ form_data.team_code if form_data else '' }}" {% if is_first is false %}required{% endif %} placeholder="Enter the team code">
         <small style="display:block; margin-top:0.35rem; color:#666;">Ask a colleague Team Admin for the code if the team was already registered.</small>
       </label>
@@ -94,6 +94,7 @@
       teamNameField.hidden = false;
       teamNameInput.required = true;
       teamCodeField.hidden = true;
+      teamCodeField.style.display = 'none';
       teamCodeInput.required = false;
       teamCodeInput.value = '';
       if (modeNotice) {
@@ -106,6 +107,7 @@
       teamNameInput.required = false;
       teamNameInput.value = '';
       teamCodeField.hidden = false;
+      teamCodeField.style.display = '';
       teamCodeInput.required = true;
       if (modeNotice) {
         modeNotice.textContent = 'This team already has another admin. The team code is required, and the team name will be pulled from the existing team record.';
