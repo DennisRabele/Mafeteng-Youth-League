@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from unittest.mock import patch
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -45,10 +46,12 @@ from app.services.registration import (
 from app.services.team_access import (
     load_team_admin_approved_team_ids,
     load_team_admin_approved_teams,
+    load_team_admin_owned_approved_teams,
 )
 from app.services.league import create_fixture
 from app.services.league import submit_match_result
 from app.web.routes import _load_result_fixture_players
+import app.web.routes as routes
 
 
 def make_session():
@@ -266,6 +269,141 @@ def test_approved_team_admins_can_see_their_linked_team_code_and_access():
     colleague_teams = load_team_admin_approved_teams(db, colleague_admin.team_admin_id)
     assert len(colleague_teams) == 1
     assert colleague_teams[0].team_code == team.team_code
+
+
+def test_team_admin_limit_increases_to_seven_per_team():
+    db = make_session()
+    category = seed_category(db)
+
+    owner_admin = create_team_admin_registration(
+        db,
+        full_name="Owner Admin",
+        team_name="Seven Club",
+        email="owner-seven@example.test",
+        password="Password123",
+        national_id="NID-OWNER-SEVEN",
+        phone="+26650000016",
+        photo_path="/uploads/admin-photos/owner-seven.png",
+    )
+    owner_admin = approve_team_admin(db, owner_admin.team_admin_id)
+    team = register_team(
+        db,
+        team_admin_id=owner_admin.team_admin_id,
+        team_name="Seven Club",
+        category_id=category.category_id,
+        contact_information="+26650000017",
+        team_address="Seven Road",
+        training_ground="Seven Training",
+        home_ground="Seven Ground",
+        logo="/uploads/team-logos/seven-club.png",
+    )
+    team = approve_team(db, team.team_id)
+
+    for index in range(6):
+        extra_admin = create_team_admin_registration(
+            db,
+            full_name=f"Colleague {['Zero','One','Two','Three','Four','Five'][index]}",
+            team_name=None,
+            email=f"colleague{index}-seven@example.test",
+            password="Password123",
+            national_id=f"NID-COLLEAGUE-SEVEN-{index}",
+            phone=f"+2665000002{index}",
+            photo_path=f"/uploads/admin-photos/colleague-seven-{index}.png",
+            team_code=team.team_code,
+        )
+        assert extra_admin.team_id == team.team_id
+
+    try:
+        create_team_admin_registration(
+            db,
+            full_name="Colleague Seven",
+            team_name=None,
+            email="colleague7-seven@example.test",
+            password="Password123",
+            national_id="NID-COLLEAGUE-SEVEN-7",
+            phone="+26650000029",
+            photo_path="/uploads/admin-photos/colleague-seven-7.png",
+            team_code=team.team_code,
+        )
+    except RegistrationError as exc:
+        assert "Maximum number of team admins reached for this team." in str(exc)
+    else:
+        raise AssertionError("Expected the eighth admin registration to be rejected.")
+
+
+def test_colleague_admin_cannot_register_clubs_but_keeps_other_team_access():
+    db = make_session()
+    category = seed_category(db)
+
+    owner_admin = create_team_admin_registration(
+        db,
+        full_name="Owner Admin",
+        team_name="Access Club",
+        email="owner-access@example.test",
+        password="Password123",
+        national_id="NID-OWNER-ACCESS",
+        phone="+26650000030",
+        photo_path="/uploads/admin-photos/owner-access.png",
+    )
+    owner_admin = approve_team_admin(db, owner_admin.team_admin_id)
+    team = register_team(
+        db,
+        team_admin_id=owner_admin.team_admin_id,
+        team_name="Access Club",
+        category_id=category.category_id,
+        contact_information="+26650000031",
+        team_address="Access Road",
+        training_ground="Access Training",
+        home_ground="Access Ground",
+        logo="/uploads/team-logos/access-club.png",
+    )
+    team = approve_team(db, team.team_id)
+
+    colleague_admin = create_team_admin_registration(
+        db,
+        full_name="Colleague Access",
+        team_name=None,
+        email="colleague-access@example.test",
+        password="Password123",
+        national_id="NID-COLLEAGUE-ACCESS",
+        phone="+26650000032",
+        photo_path="/uploads/admin-photos/colleague-access.png",
+        team_code=team.team_code,
+    )
+    colleague_admin = approve_team_admin(db, colleague_admin.team_admin_id)
+
+    assert load_team_admin_approved_team_ids(db, colleague_admin.team_admin_id) == [team.team_id]
+    assert load_team_admin_owned_approved_teams(db, colleague_admin.team_admin_id) == []
+
+    redirect_calls: list[tuple[str, str, str]] = []
+
+    def fake_redirect(*, section: str, notice: str, notice_kind: str = "success"):
+        redirect_calls.append((section, notice, notice_kind))
+        return {"section": section, "notice": notice, "notice_kind": notice_kind}
+
+    with (
+        patch.object(routes, "_require_team_admin", return_value=colleague_admin),
+        patch.object(routes, "_team_admin_dashboard_redirect", side_effect=fake_redirect),
+        patch.object(routes, "register_team") as register_team_mock,
+        patch.object(routes, "_safe_upload", return_value="/uploads/team-logos/blocked.png"),
+    ):
+        response = routes.create_team_route(
+            request=object(),
+            team_name="Blocked Club",
+            category_id=category.category_id,
+            contact_information="+26650000033",
+            team_address="Blocked Road",
+            training_ground="Blocked Training",
+            home_ground="Blocked Ground",
+            logo=None,
+            team_code=team.team_code,
+            db=db,
+        )
+
+    assert response["notice_kind"] == "error"
+    assert "Only the default team admin can register clubs." in response["notice"]
+    assert redirect_calls
+    register_team_mock.assert_not_called()
 
 
 def test_player_registration_expiry_reminder_is_sent_once():

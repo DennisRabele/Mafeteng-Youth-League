@@ -86,6 +86,7 @@ from app.services.team_access import (
     load_team_admin_approved_team_ids,
     load_team_admin_approved_teams,
     load_team_admin_primary_team,
+    load_team_admin_owned_approved_teams,
     load_team_admin_teams,
     team_admin_has_access_to_team,
 )
@@ -1744,8 +1745,10 @@ def team_admin_dashboard(
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
     teams = load_team_admin_teams(db, team_admin.team_admin_id)
     approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
+    owned_approved_teams = load_team_admin_owned_approved_teams(db, team_admin.team_admin_id)
     approved_team = approved_teams[0] if approved_teams else None
     approved_team_ids = [team.team_id for team in approved_teams]
+    can_register_clubs = bool(owned_approved_teams) or not approved_teams
     players = db.scalars(
         select(Player)
         .options(selectinload(Player.team))
@@ -1897,6 +1900,7 @@ def team_admin_dashboard(
             "teams": teams,
             "approved_teams": approved_teams,
             "approved_team": approved_team,
+            "can_register_clubs": can_register_clubs,
             "players": players,
             "approved_players": approved_players,
             "renewal_requests": renewal_requests,
@@ -2404,7 +2408,14 @@ def create_team_route(
 ):
     team_admin = _require_team_admin(request, db)
     approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
+    owned_approved_teams = load_team_admin_owned_approved_teams(db, team_admin.team_admin_id)
     is_first_team_registration = not approved_teams
+    if not is_first_team_registration and not owned_approved_teams:
+        return _team_admin_dashboard_redirect(
+            section="team-form",
+            notice="Only the default team admin can register clubs. Colleague admins can manage players, fixtures, results, and performances.",
+            notice_kind="error",
+        )
     normalized_team_name = (team_name or "").strip()
     normalized_team_code = (team_code or "").strip()
 

@@ -592,7 +592,7 @@ def create_team_admin_registration(
         else:
             normalized_team_name = team.team_name.strip()
         admin_count = len(db.scalars(select(TeamAdmin).where(TeamAdmin.team_id == team.team_id)).all())
-        if admin_count >= 5:
+        if admin_count >= 7:
             raise RegistrationError("Maximum number of team admins reached for this team.")
     else:
         if not normalized_team_name:

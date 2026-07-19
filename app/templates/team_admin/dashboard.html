@@ -39,53 +39,59 @@
       <div class="panel-heading">
         <h2>Team Registration</h2>
       </div>
-      {% if approved_teams %}
-        <div class="alert" style="background:#fff2e8; border-color:#c26a00; margin-bottom: 1rem;">
-          This team admin already has an approved club. Use the Team Code from <strong>My Account</strong> to register another club category. Team name is not required here.
-        </div>
+      {% if can_register_clubs %}
+        {% if approved_teams %}
+          <div class="alert" style="background:#fff2e8; border-color:#c26a00; margin-bottom: 1rem;">
+            This team admin already has an approved club. Use the Team Code from <strong>My Account</strong> to register another club category. Team name is not required here.
+          </div>
+        {% else %}
+          <div class="alert" style="background:#eef5ff; border-color:#2d6cdf; margin-bottom: 1rem;">
+            This is the first team registration. Enter the team name now. The Team Code will be generated after approval and shown in <strong>My Account</strong>.
+          </div>
+        {% endif %}
+        <form class="form-grid two" method="post" action="/team-admin/teams" enctype="multipart/form-data">
+          {% if approved_teams %}
+            <label>Team Code
+              <input name="team_code" required placeholder="Enter the team code from a colleague">
+              <small style="display:block; margin-top:0.35rem; color:#666;">Use the team code from a colleague Team Admin if this team was already registered.</small>
+            </label>
+          {% else %}
+            <label>Team Name
+              <input name="team_name" value="{{ team_admin.requested_team_name }}" required pattern="[A-Za-z0-9\s]+" title="Team name must contain only letters, numbers, and spaces">
+              <small style="display:block; margin-top:0.35rem; color:#666;">Use the exact team name from your Team Admin registration.</small>
+            </label>
+          {% endif %}
+          <label>Category
+            <select name="category_id" required>
+              {% for category in categories %}
+                <option value="{{ category.category_id }}">{{ category.category_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Contact Information
+            <input name="contact_information" required>
+          </label>
+          <label>Team Address
+            <input name="team_address" required>
+          </label>
+          <label>Training Grounds
+            <input name="training_ground" required>
+          </label>
+          <label>Home Grounds
+            <input name="home_ground" required>
+          </label>
+          <label>Team Logo
+            <input name="logo" type="file" accept="image/*" required>
+          </label>
+          <div class="form-actions wide">
+            <button class="button button-primary" type="submit">Submit Team Registration</button>
+          </div>
+        </form>
       {% else %}
-        <div class="alert" style="background:#eef5ff; border-color:#2d6cdf; margin-bottom: 1rem;">
-          This is the first team registration. Enter the team name now. The Team Code will be generated after approval and shown in <strong>My Account</strong>.
+        <div class="alert" style="background:#f5f5f5; border-color:#9e9e9e; margin-bottom: 1rem;">
+          Club registration is reserved for the default team admin who created the club record. Colleague admins can manage players, fixtures, results, and performances for the approved team only.
         </div>
       {% endif %}
-      <form class="form-grid two" method="post" action="/team-admin/teams" enctype="multipart/form-data">
-        {% if approved_teams %}
-          <label>Team Code
-            <input name="team_code" required placeholder="Enter the team code from a colleague">
-            <small style="display:block; margin-top:0.35rem; color:#666;">Use the team code from a colleague Team Admin if this team was already registered.</small>
-          </label>
-        {% else %}
-          <label>Team Name
-            <input name="team_name" value="{{ team_admin.requested_team_name }}" required pattern="[A-Za-z0-9\s]+" title="Team name must contain only letters, numbers, and spaces">
-            <small style="display:block; margin-top:0.35rem; color:#666;">Use the exact team name from your Team Admin registration.</small>
-          </label>
-        {% endif %}
-        <label>Category
-          <select name="category_id" required>
-            {% for category in categories %}
-              <option value="{{ category.category_id }}">{{ category.category_name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Contact Information
-          <input name="contact_information" required>
-        </label>
-        <label>Team Address
-          <input name="team_address" required>
-        </label>
-        <label>Training Grounds
-          <input name="training_ground" required>
-        </label>
-        <label>Home Grounds
-          <input name="home_ground" required>
-        </label>
-        <label>Team Logo
-          <input name="logo" type="file" accept="image/*" required>
-        </label>
-        <div class="form-actions wide">
-          <button class="button button-primary" type="submit">Submit Team Registration</button>
-        </div>
-      </form>
     </section>
 
     <section class="dashboard-section" id="player-form" data-dashboard-section="player-form" hidden>

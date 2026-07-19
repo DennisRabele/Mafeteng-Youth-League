@@ -43,6 +43,18 @@ def load_team_admin_approved_team_ids(db: Session, team_admin_id: int) -> list[i
     return [team.team_id for team in load_team_admin_approved_teams(db, team_admin_id)]
 
 
+def load_team_admin_owned_approved_teams(db: Session, team_admin_id: int) -> list[Team]:
+    return [
+        team
+        for team in load_team_admin_teams(db, team_admin_id)
+        if team.status == ApprovalStatus.APPROVED.value and team.team_admin_id == team_admin_id
+    ]
+
+
+def load_team_admin_owned_approved_team_ids(db: Session, team_admin_id: int) -> list[int]:
+    return [team.team_id for team in load_team_admin_owned_approved_teams(db, team_admin_id)]
+
+
 def team_admin_has_access_to_team(db: Session, team_admin_id: int, team_id: int | None) -> bool:
     if not team_id:
         return False
@@ -52,4 +64,3 @@ def team_admin_has_access_to_team(db: Session, team_admin_id: int, team_id: int 
 def load_team_admin_primary_team(db: Session, team_admin_id: int) -> Team | None:
     approved_teams = load_team_admin_approved_teams(db, team_admin_id)
     return approved_teams[0] if approved_teams else None
-
