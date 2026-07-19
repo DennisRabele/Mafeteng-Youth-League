@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from sqlalchemy import create_engine, select
@@ -440,6 +441,67 @@ def test_colleague_admin_cannot_register_clubs_but_keeps_other_team_access():
     assert "Only the default team admin can register clubs." in response["notice"]
     assert redirect_calls
     register_team_mock.assert_not_called()
+
+
+def test_default_team_admin_can_register_another_club_without_team_code():
+    db = make_session()
+    category = seed_category(db)
+
+    owner_admin = create_team_admin_registration(
+        db,
+        full_name="Default Admin",
+        team_name="Primary Club",
+        email="default-admin@example.test",
+        password="Password123",
+        national_id="NID-DEFAULT-ADMIN",
+        phone="+26650000034",
+        photo_path="/uploads/admin-photos/default-admin.png",
+    )
+    owner_admin = approve_team_admin(db, owner_admin.team_admin_id)
+    primary_team = register_team(
+        db,
+        team_admin_id=owner_admin.team_admin_id,
+        team_name="Primary Club",
+        category_id=category.category_id,
+        contact_information="+26650000035",
+        team_address="Primary Road",
+        training_ground="Primary Training",
+        home_ground="Primary Ground",
+        logo="/uploads/team-logos/primary-club.png",
+    )
+    approve_team(db, primary_team.team_id)
+
+    redirect_calls: list[tuple[str, str, str]] = []
+
+    def fake_redirect(*, section: str, notice: str, notice_kind: str = "success"):
+        redirect_calls.append((section, notice, notice_kind))
+        return {"section": section, "notice": notice, "notice_kind": notice_kind}
+
+    with (
+        patch.object(routes, "_require_team_admin", return_value=owner_admin),
+        patch.object(routes, "_team_admin_dashboard_redirect", side_effect=fake_redirect),
+        patch.object(routes, "register_team", return_value=SimpleNamespace(team_name="Second Club")) as register_team_mock,
+        patch.object(routes, "_safe_upload", return_value="/uploads/team-logos/second-club.png"),
+        patch.object(routes, "_announce_submission"),
+    ):
+        response = routes.create_team_route(
+            request=object(),
+            team_name="Second Club",
+            category_id=category.category_id,
+            contact_information="+26650000036",
+            team_address="Second Road",
+            training_ground="Second Training",
+            home_ground="Second Ground",
+            logo=None,
+            team_code=None,
+            db=db,
+        )
+
+    assert response["notice_kind"] == "success"
+    assert redirect_calls
+    register_team_mock.assert_called_once()
+    assert register_team_mock.call_args.kwargs["team_name"] == "Second Club"
+    assert "team_code" not in register_team_mock.call_args.kwargs
 
 
 def test_player_registration_expiry_reminder_is_sent_once():

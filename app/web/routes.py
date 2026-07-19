@@ -2417,18 +2417,11 @@ def create_team_route(
             notice_kind="error",
         )
     normalized_team_name = (team_name or "").strip()
-    normalized_team_code = (team_code or "").strip()
 
-    if is_first_team_registration and normalized_team_code:
+    if not normalized_team_name:
         return _team_admin_dashboard_redirect(
             section="team-form",
-            notice="Team code is not required for the first team registration.",
-            notice_kind="error",
-        )
-    if is_first_team_registration and not normalized_team_name:
-        return _team_admin_dashboard_redirect(
-            section="team-form",
-            notice="Team name is required for the first team registration.",
+            notice="Team name is required for team registration.",
             notice_kind="error",
         )
     if is_first_team_registration and normalized_team_name:
@@ -2439,25 +2432,18 @@ def create_team_route(
                 notice="Team name must exactly match the team name used in your Team Admin registration.",
                 notice_kind="error",
             )
-    if not is_first_team_registration and not normalized_team_code:
-        return _team_admin_dashboard_redirect(
-            section="team-form",
-            notice="Team code is required for additional team registrations.",
-            notice_kind="error",
-        )
     try:
         logo_path = _safe_upload(logo, "team-logos")
         registered_team = register_team(
             db,
             team_admin_id=team_admin.team_admin_id,
-            team_name=normalized_team_name if is_first_team_registration else None,
+            team_name=normalized_team_name,
             category_id=category_id,
             contact_information=contact_information,
             team_address=team_address,
             training_ground=training_ground,
             home_ground=home_ground,
             logo=logo_path,
-            team_code=normalized_team_code or None,
         )
         _announce_submission(
             db,
