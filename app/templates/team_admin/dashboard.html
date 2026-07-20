@@ -80,6 +80,24 @@
             <button class="button button-primary" type="submit">Submit Team Registration</button>
           </div>
         </form>
+
+        <form class="form-grid result-upload-form" method="post" action="/team-admin/results/upload" enctype="multipart/form-data" style="margin-top:1rem;">
+          <label class="result-field result-field--full">Upload match results file
+            <select name="fixture_id" required>
+              <option value="">Select a played fixture</option>
+              {% for fixture in played_fixtures %}
+                <option value="{{ fixture.fixture_id }}">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</option>
+              {% endfor %}
+            </select>
+            <p class="section-copy">Choose the fixture then select a CSV or text file containing scorers, assisters and goal types.</p>
+          </label>
+          <label class="result-field result-field--full">Result file
+            <input id="result-upload-file" name="file" type="file" accept=".csv,.txt" required>
+          </label>
+          <div class="form-actions wide">
+            <button class="button button-muted" type="submit">Upload Match Results File</button>
+          </div>
+        </form>
       {% else %}
         <div class="alert" style="background:#f5f5f5; border-color:#9e9e9e; margin-bottom: 1rem;">
           Club registration is reserved for the default team admin who created the club record. Colleague admins can manage players, fixtures, results, and performances for the approved team only.
@@ -1868,7 +1886,7 @@
                     <h3>Home Team Scorers AND Goal Types</h3>
                     <p class="section-copy">Use players from the home team. Every scored goal gets one scorer and one goal type.</p>
                   </div>
-                  <button class="button button-muted small" type="button" onclick="addResultGoalRow('home', 'scorer', event)">Add Home Scorer</button>
+                  
                 </div>
                 <div class="result-goal-rows" data-result-goal-rows="home-scorers"></div>
               </div>
@@ -1878,7 +1896,7 @@
                     <h3>Home Team Assisters</h3>
                     <p class="section-copy">Leave blank when a goal has no assist, such as a penalty or direct free kick.</p>
                   </div>
-                  <button class="button button-muted small" type="button" onclick="addResultGoalRow('home', 'assist', event)">Add Home Assist</button>
+                  
                 </div>
                 <div class="result-goal-rows" data-result-goal-rows="home-assists"></div>
               </div>
@@ -1890,7 +1908,7 @@
                     <h3>Away Team Scorers AND Goal Types</h3>
                     <p class="section-copy">Use players from the away team. Every scored goal gets one scorer and one goal type.</p>
                   </div>
-                  <button class="button button-muted small" type="button" onclick="addResultGoalRow('away', 'scorer', event)">Add Away Scorer</button>
+                  
                 </div>
                 <div class="result-goal-rows" data-result-goal-rows="away-scorers"></div>
               </div>
@@ -1900,7 +1918,7 @@
                     <h3>Away Team Assisters</h3>
                     <p class="section-copy">Leave blank when a goal has no assist, such as a penalty or direct free kick.</p>
                   </div>
-                  <button class="button button-muted small" type="button" onclick="addResultGoalRow('away', 'assist', event)">Add Away Assist</button>
+                  
                 </div>
                 <div class="result-goal-rows" data-result-goal-rows="away-assists"></div>
               </div>

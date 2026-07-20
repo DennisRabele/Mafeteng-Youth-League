@@ -16,6 +16,7 @@ _SUPABASE_BUCKETS = {
     "player-documents": settings.supabase_player_documents_bucket,
     "player-photos": settings.supabase_player_photos_bucket,
     "player-agreements": settings.supabase_player_agreements_bucket,
+    "match-results": settings.supabase_match_results_bucket,
 }
 _supabase_client = None
 

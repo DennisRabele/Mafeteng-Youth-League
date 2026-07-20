@@ -47,6 +47,9 @@ class Settings:
     supabase_player_agreements_bucket: str = os.getenv(
         "SUPABASE_PLAYER_AGREEMENTS_BUCKET", "player agreements"
     )
+    supabase_match_results_bucket: str = os.getenv(
+        "SUPABASE_MATCH_RESULTS_BUCKET", "match results"
+    )
     super_admin_name: str = os.getenv("SUPER_ADMIN_NAME", "League Super Admin")
     super_admin_email: str = os.getenv("SUPER_ADMIN_EMAIL", "admin@ydl.local")
     super_admin_password: str = os.getenv("SUPER_ADMIN_PASSWORD", "Admin123!")

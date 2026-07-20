@@ -2274,6 +2274,50 @@ def submit_result_route(
     return _redirect("/team-admin/dashboard#results")
 
 
+@router.post("/team-admin/results/upload")
+def upload_result_file(
+    request: Request,
+    fixture_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    try:
+        fixture = db.get(Fixture, fixture_id)
+        if not fixture:
+            raise RegistrationError("Fixture was not found.")
+        try:
+            from app.services.league import _fixture_allows_result_submission
+
+            allows = _fixture_allows_result_submission(fixture)
+        except Exception:
+            allows = fixture.fixture_date <= datetime.utcnow()
+        if not allows:
+            raise RegistrationError("Results can only be uploaded after the fixture has been played.")
+        # Ensure the team admin is linked to one of the fixture teams
+        if team_admin.team_admin_id not in {fixture.home_team.team_admin_id, fixture.away_team.team_admin_id}:
+            raise RegistrationError("You can only upload results for fixtures involving your teams.")
+
+        saved = _safe_upload(file, "match-results")
+        try:
+            from app.services.league import notify_super_admins
+
+            notify_super_admins(
+                db,
+                "Match results file uploaded",
+                f"A match results file was uploaded for {fixture.home_team.team_name} vs {fixture.away_team.team_name}.",
+                "/super-admin#results",
+            )
+        except Exception:
+            pass
+    except RegistrationError as exc:
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    except Exception:
+        logger.exception("Result file upload failed")
+        return _render(request, "team_admin/action_result.html", {"error": "Result file upload failed. Please try again."})
+    return _team_admin_dashboard_redirect(section="results", notice="Match results file uploaded")
+
+
 def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, object]:
     fixture = db.scalar(
         select(Fixture)
