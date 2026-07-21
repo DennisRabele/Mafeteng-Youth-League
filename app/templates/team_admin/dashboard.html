@@ -81,23 +81,6 @@
           </div>
         </form>
 
-        <form class="form-grid result-upload-form" method="post" action="/team-admin/results/upload" enctype="multipart/form-data" style="margin-top:1rem;">
-          <label class="result-field result-field--full">Upload match results file
-            <select name="fixture_id" required>
-              <option value="">Select a played fixture</option>
-              {% for fixture in played_fixtures %}
-                <option value="{{ fixture.fixture_id }}">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</option>
-              {% endfor %}
-            </select>
-            <p class="section-copy">Choose the fixture then select a CSV or text file containing scorers, assisters and goal types.</p>
-          </label>
-          <label class="result-field result-field--full">Result file
-            <input id="result-upload-file" name="file" type="file" accept=".csv,.txt" required>
-          </label>
-          <div class="form-actions wide">
-            <button class="button button-muted" type="submit">Upload Match Results File</button>
-          </div>
-        </form>
       {% else %}
         <div class="alert" style="background:#f5f5f5; border-color:#9e9e9e; margin-bottom: 1rem;">
           Club registration is reserved for the default team admin who created the club record. Colleague admins can manage players, fixtures, results, and performances for the approved team only.
@@ -873,359 +856,55 @@
             });
           });
 
-          const resultGoalTypeOptions = [
-            ['freekick', 'Freekick'],
-            ['penalty', 'Penalty'],
-            ['header from open play', 'Header from open play'],
-            ['header from corner kick', 'Header from corner kick'],
-          ];
-
-          const resultPlayerState = {
-            fixtureId: '',
-            loading: false,
-            homePlayers: [],
-            awayPlayers: [],
-          };
-          let resultPlayersRequestToken = 0;
-
           function getResultEntryState() {
             return {
               resultForm: document.querySelector('[data-result-form]'),
               resultFixtureSelect: document.getElementById('result-fixture-select'),
               resultHomeScore: document.getElementById('result-home-score'),
               resultAwayScore: document.getElementById('result-away-score'),
-              resultScorerNames: document.getElementById('result-scorer-names'),
-              resultGoalTypes: document.getElementById('result-goal-types'),
-              resultAssistNames: document.getElementById('result-assist-names'),
-              resultGoalSections: {
-                home: {
-                  scorers: document.querySelector('[data-result-goal-rows="home-scorers"]'),
-                  assists: document.querySelector('[data-result-goal-rows="home-assists"]'),
-                },
-                away: {
-                  scorers: document.querySelector('[data-result-goal-rows="away-scorers"]'),
-                  assists: document.querySelector('[data-result-goal-rows="away-assists"]'),
-                },
-              },
+              resultStatusNote: document.querySelector('[data-result-status-note]'),
             };
           }
 
-          function getResultGoalContainer(side, kind) {
-            return getResultEntryState().resultGoalSections[side]?.[kind] || null;
-          }
-
-          function getResultPlayersForSide(side) {
-            return side === 'home' ? resultPlayerState.homePlayers : resultPlayerState.awayPlayers;
-          }
-
-          function getResultPlayerPlaceholder(side, kind) {
-            if (!resultPlayerState.fixtureId) {
-              return 'Select a played fixture first';
-            }
-            if (resultPlayerState.loading) {
-              return 'Loading eligible players...';
-            }
-            const sideLabel = side === 'home' ? 'home team' : 'away team';
-            if (!getResultPlayersForSide(side).length) {
-              return 'No eligible players found';
-            }
-            return kind === 'scorer'
-              ? `Select ${sideLabel} player`
-              : `Optional: select ${sideLabel} player`;
-          }
-
-          function populateResultPlayerSelect(select, side, kind) {
-            if (!select) {
+          function syncResultUploadState() {
+            const state = getResultEntryState();
+            if (!state.resultForm || !state.resultFixtureSelect || !state.resultHomeScore || !state.resultAwayScore) {
               return;
             }
-            const currentValue = select.value;
-            const players = getResultPlayersForSide(side);
-            const placeholder = getResultPlayerPlaceholder(side, kind);
-            select.innerHTML = '';
-            const placeholderOption = document.createElement('option');
-            placeholderOption.value = '';
-            placeholderOption.textContent = placeholder;
-            select.appendChild(placeholderOption);
-            players.forEach((player) => {
-              const option = document.createElement('option');
-              option.value = player.player_name;
-              option.textContent = player.player_name;
-              select.appendChild(option);
-            });
-            select.disabled = !resultPlayerState.fixtureId || resultPlayerState.loading || players.length === 0;
-            if (currentValue && players.some((player) => player.player_name === currentValue)) {
-              select.value = currentValue;
-            } else {
-              select.value = '';
-            }
-          }
-
-          function refreshResultPlayerSelects() {
-            const { resultGoalSections } = getResultEntryState();
-            Object.entries(resultGoalSections).forEach(([side, section]) => {
-              Object.entries(section).forEach(([, container]) => {
-                if (!container) {
-                  return;
-                }
-                container.querySelectorAll('select[data-result-scorer], select[data-result-assist]').forEach((select) => {
-                  const row = select.closest('[data-result-goal-row]');
-                  const kind = select.hasAttribute('data-result-scorer') ? 'scorer' : 'assist';
-                  const rowSide = row?.dataset.resultSide || side;
-                  populateResultPlayerSelect(select, rowSide, kind);
-                });
-              });
-            });
-          }
-
-          function buildResultGoalRow(side, kind, index) {
-            const row = document.createElement('div');
-            row.className = 'result-goal-row';
-            row.dataset.resultGoalRow = 'true';
-            row.dataset.resultSide = side;
-            row.dataset.resultKind = kind;
-            const sideLabel = side === 'home' ? 'Home Team' : 'Away Team';
-            const titleLabel = kind === 'scorer' ? 'Goal' : 'Assist';
-            row.innerHTML = kind === 'scorer'
-              ? `
-                <div class="result-goal-row__title">${sideLabel} ${titleLabel} ${index + 1}</div>
-                <label>Scorer
-                  <select data-result-scorer required>
-                    <option value="">${getResultPlayerPlaceholder(side, kind)}</option>
-                  </select>
-                </label>
-                <label>Goal type
-                  <select data-result-goal-type>
-                    ${resultGoalTypeOptions.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}
-                  </select>
-                </label>
-              `
-              : `
-                <div class="result-goal-row__title">${sideLabel} ${titleLabel} ${index + 1}</div>
-                <label>Assister
-                  <select data-result-assist>
-                    <option value="">${getResultPlayerPlaceholder(side, kind)}</option>
-                  </select>
-                </label>
-              `;
-            return row;
-          }
-
-          function ensureResultGoalRows(side, kind, minRows) {
-            const container = getResultGoalContainer(side, kind);
-            if (!container) {
+            const selected = state.resultFixtureSelect.selectedOptions[0];
+            if (!selected || !selected.value) {
+              if (state.resultStatusNote) {
+                state.resultStatusNote.hidden = true;
+                state.resultStatusNote.textContent = '';
+              }
               return;
             }
-            const requiredRows = Math.max(0, minRows);
-            while (container.children.length < requiredRows) {
-              const row = buildResultGoalRow(side, kind, container.children.length);
-              container.appendChild(row);
+            if (!state.resultHomeScore.value && selected.dataset.homeScore) {
+              state.resultHomeScore.value = selected.dataset.homeScore;
             }
-            Array.from(container.children).forEach((row, index) => {
-              const title = row.querySelector('.result-goal-row__title');
-              if (title) {
-                const sideLabel = side === 'home' ? 'Home Team' : 'Away Team';
-                const titleLabel = kind === 'scorer' ? 'Goal' : 'Assist';
-                title.textContent = `${sideLabel} ${titleLabel} ${index + 1}`;
-              }
-            });
-            refreshResultPlayerSelects();
-          }
-
-          function addResultGoalRow(side, kind, event) {
-            if (event) {
-              event.preventDefault();
+            if (!state.resultAwayScore.value && selected.dataset.awayScore) {
+              state.resultAwayScore.value = selected.dataset.awayScore;
             }
-            if (!resultPlayerState.fixtureId) {
-              alert('Select a played fixture first so the player list can be loaded.');
-              return;
-            }
-            const container = getResultGoalContainer(side, kind);
-            if (!container) {
-              return;
-            }
-            ensureResultGoalRows(side, kind, container.children.length + 1);
-            const lastRow = container.lastElementChild;
-            lastRow?.querySelector('[data-result-scorer], [data-result-assist]')?.focus?.();
-          }
-
-          async function loadResultFixturePlayers(fixtureId) {
-            const normalizedFixtureId = String(fixtureId || '');
-            resultPlayersRequestToken += 1;
-            const requestToken = resultPlayersRequestToken;
-            resultPlayerState.fixtureId = normalizedFixtureId;
-            resultPlayerState.loading = Boolean(normalizedFixtureId);
-            resultPlayerState.homePlayers = [];
-            resultPlayerState.awayPlayers = [];
-            refreshResultPlayerSelects();
-            if (!normalizedFixtureId) {
-              return;
-            }
-            try {
-              const response = await fetch(`/api/team-admin/result-players?fixture_id=${encodeURIComponent(normalizedFixtureId)}`);
-              if (!response.ok) {
-                throw new Error(`Request failed with ${response.status}`);
+            if (state.resultStatusNote) {
+              const status = (selected.dataset.resultStatus || '').toLowerCase();
+              const reason = selected.dataset.rejectionReason || '';
+              if (status === 'rejected' && reason) {
+                state.resultStatusNote.textContent = `Rejected result: ${reason}`;
+                state.resultStatusNote.hidden = false;
+              } else if (status === 'rejected') {
+                state.resultStatusNote.textContent = 'This result was rejected. Update the file and resubmit.';
+                state.resultStatusNote.hidden = false;
+              } else if (status === 'approved') {
+                state.resultStatusNote.textContent = 'This result was approved and is awaiting file cleanup.';
+                state.resultStatusNote.hidden = false;
+              } else {
+                state.resultStatusNote.hidden = true;
+                state.resultStatusNote.textContent = '';
               }
-              const data = await response.json();
-              if (requestToken !== resultPlayersRequestToken) {
-                return;
-              }
-              resultPlayerState.homePlayers = Array.isArray(data.home_players) ? data.home_players : [];
-              resultPlayerState.awayPlayers = Array.isArray(data.away_players) ? data.away_players : [];
-            } catch (error) {
-              console.error('Error loading result players:', error);
-              if (requestToken === resultPlayersRequestToken) {
-                alert('Could not load eligible players for this fixture.');
-              }
-            } finally {
-              if (requestToken !== resultPlayersRequestToken) {
-                return;
-              }
-              resultPlayerState.loading = false;
-              refreshResultPlayerSelects();
             }
           }
 
-          async function updateResultFixtureSummary() {
-            const { resultFixtureSelect } = getResultEntryState();
-            await loadResultFixturePlayers(resultFixtureSelect?.value || '');
-          }
-
-          function collectResultGoalRows(event) {
-            const { resultScorerNames, resultGoalTypes, resultAssistNames, resultHomeScore, resultAwayScore, resultGoalSections } = getResultEntryState();
-            if (!resultScorerNames || !resultGoalTypes || !resultAssistNames) {
-              return true;
-            }
-            const home = Number.parseInt(resultHomeScore?.value || '0', 10);
-            const away = Number.parseInt(resultAwayScore?.value || '0', 10);
-            const homeGoals = Number.isFinite(home) ? Math.max(0, home) : 0;
-            const awayGoals = Number.isFinite(away) ? Math.max(0, away) : 0;
-            const totalGoals = homeGoals + awayGoals;
-            const allRows = Object.values(resultGoalSections).flatMap((section) => [
-              ...(section.scorers ? Array.from(section.scorers.querySelectorAll('[data-result-goal-row]')) : []),
-              ...(section.assists ? Array.from(section.assists.querySelectorAll('[data-result-goal-row]')) : []),
-            ]);
-            const hasEnteredDetails = allRows.some((row) => {
-              const scorerInput = row.querySelector('[data-result-scorer]');
-              const goalTypeSelect = row.querySelector('[data-result-goal-type]');
-              const assistInput = row.querySelector('[data-result-assist]');
-              return Boolean(
-                (scorerInput?.value || '').trim() ||
-                (goalTypeSelect?.value || '').trim() ||
-                (assistInput?.value || '').trim()
-              );
-            });
-            if (totalGoals === 0) {
-              if (hasEnteredDetails) {
-                event?.preventDefault();
-                alert('A 0-0 result must not include scorer or assist entries.');
-                return false;
-              }
-              resultScorerNames.value = '';
-              resultGoalTypes.value = '';
-              resultAssistNames.value = '';
-              return true;
-            }
-            const homeScorerRows = Array.from(resultGoalSections.home.scorers?.querySelectorAll('[data-result-goal-row]') || []);
-            const awayScorerRows = Array.from(resultGoalSections.away.scorers?.querySelectorAll('[data-result-goal-row]') || []);
-            const homeAssistRows = Array.from(resultGoalSections.home.assists?.querySelectorAll('[data-result-goal-row]') || []);
-            const awayAssistRows = Array.from(resultGoalSections.away.assists?.querySelectorAll('[data-result-goal-row]') || []);
-            if (homeScorerRows.length < homeGoals || awayScorerRows.length < awayGoals) {
-              event?.preventDefault();
-              alert('Please add enough scorer rows to cover the selected home and away scores.');
-              return false;
-            }
-            if (homeAssistRows.length < homeGoals || awayAssistRows.length < awayGoals) {
-              event?.preventDefault();
-              alert('Please add enough assist rows to cover the selected home and away scores.');
-              return false;
-            }
-            const collectScorerRows = (rows, requiredRows, sideLabel) => {
-              const scorers = [];
-              const goalTypes = [];
-              rows.slice(0, requiredRows).forEach((row) => {
-                const scorerInput = row.querySelector('[data-result-scorer]');
-                const goalTypeSelect = row.querySelector('[data-result-goal-type]');
-                const scorer = scorerInput ? scorerInput.value.trim() : '';
-                const goalType = goalTypeSelect ? goalTypeSelect.value : 'freekick';
-                if (!scorer) {
-                  event?.preventDefault();
-                  scorerInput?.focus();
-                  alert(`Each ${sideLabel} goal row must have a scorer name.`);
-                  throw new Error('missing scorer');
-                }
-                scorers.push(scorer);
-                goalTypes.push(goalType || 'freekick');
-              });
-              const hasOverflow = rows.slice(requiredRows).some((row) => {
-                const scorerInput = row.querySelector('[data-result-scorer]');
-                const goalTypeSelect = row.querySelector('[data-result-goal-type]');
-                return Boolean((scorerInput?.value || '').trim() || (goalTypeSelect?.value || '').trim());
-              });
-              if (hasOverflow) {
-                event?.preventDefault();
-                alert(`Clear any extra ${sideLabel} scorer rows so they match the selected score.`);
-                throw new Error('extra scorer rows');
-              }
-              return { scorers, goalTypes };
-            };
-            const collectAssistRows = (rows, requiredRows, sideLabel) => {
-              const assists = rows.slice(0, requiredRows).map((row) => row.querySelector('[data-result-assist]')?.value.trim() || '');
-              const hasOverflow = rows.slice(requiredRows).some((row) => Boolean((row.querySelector('[data-result-assist]')?.value || '').trim()));
-              if (hasOverflow) {
-                event?.preventDefault();
-                alert(`Clear any extra ${sideLabel} assist rows so they match the selected score.`);
-                throw new Error('extra assist rows');
-              }
-              return assists;
-            };
-
-            let homeScorerData;
-            let awayScorerData;
-            try {
-              homeScorerData = collectScorerRows(homeScorerRows, homeGoals, 'home');
-              awayScorerData = collectScorerRows(awayScorerRows, awayGoals, 'away');
-            } catch (error) {
-              if (String(error?.message || '') !== 'missing scorer') {
-                event?.preventDefault();
-                return false;
-              }
-              return false;
-            }
-            let homeAssists;
-            let awayAssists;
-            try {
-              homeAssists = collectAssistRows(homeAssistRows, homeGoals, 'home');
-              awayAssists = collectAssistRows(awayAssistRows, awayGoals, 'away');
-            } catch (error) {
-              if (String(error?.message || '') !== 'extra assist rows') {
-                event?.preventDefault();
-                return false;
-              }
-              return false;
-            }
-            resultScorerNames.value = [...homeScorerData.scorers, ...awayScorerData.scorers].join('\n');
-            resultGoalTypes.value = [...homeScorerData.goalTypes, ...awayScorerData.goalTypes].join('\n');
-            resultAssistNames.value = [...homeAssists, ...awayAssists].join('\n');
-            return true;
-          }
-
-          function syncResultGoalRowsFromScores() {
-            const { resultHomeScore, resultAwayScore } = getResultEntryState();
-            if (!resultHomeScore || !resultAwayScore) {
-              return;
-            }
-            const home = Number.parseInt(resultHomeScore.value || '0', 10);
-            const away = Number.parseInt(resultAwayScore.value || '0', 10);
-            const homeGoals = Number.isFinite(home) ? Math.max(0, home) : 0;
-            const awayGoals = Number.isFinite(away) ? Math.max(0, away) : 0;
-            ensureResultGoalRows('home', 'scorer', homeGoals);
-            ensureResultGoalRows('away', 'scorer', awayGoals);
-            ensureResultGoalRows('home', 'assist', homeGoals);
-            ensureResultGoalRows('away', 'assist', awayGoals);
-            refreshResultPlayerSelects();
-          }
-
-          function initResultEntryControls() {
+          function initResultUploadControls() {
             const state = getResultEntryState();
             if (!state.resultForm || !state.resultFixtureSelect || !state.resultHomeScore || !state.resultAwayScore) {
               return;
@@ -1234,26 +913,16 @@
               return;
             }
             window.__resultEntryControlsBound = true;
-            state.resultFixtureSelect.addEventListener('change', async () => {
-              await updateResultFixtureSummary();
-              syncResultGoalRowsFromScores();
-            });
-            state.resultHomeScore.addEventListener('input', syncResultGoalRowsFromScores);
-            state.resultAwayScore.addEventListener('input', syncResultGoalRowsFromScores);
-            state.resultForm.addEventListener('submit', (event) => {
-              syncResultGoalRowsFromScores();
-              if (!collectResultGoalRows(event)) {
-                return;
-              }
-            });
-            window.addResultGoalRow = addResultGoalRow;
-            refreshResultPlayerSelects();
+            state.resultFixtureSelect.addEventListener('change', syncResultUploadState);
+            state.resultHomeScore.addEventListener('input', syncResultUploadState);
+            state.resultAwayScore.addEventListener('input', syncResultUploadState);
+            syncResultUploadState();
           }
 
           if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initResultEntryControls);
+            document.addEventListener('DOMContentLoaded', initResultUploadControls);
           } else {
-            initResultEntryControls();
+            initResultUploadControls();
           }
 
           // Form validation to ensure player_id is set
@@ -1857,18 +1526,23 @@
       </div>
       <div class="panel result-entry-panel" style="margin-bottom: 1.5rem;">
         <div class="panel-heading">
-          <h2>Set Match Result</h2>
+          <h2>Upload Match Result</h2>
         </div>
         {% if played_fixtures %}
-        <form class="form-grid result-entry-form" method="post" action="/team-admin/results" data-result-form>
+        <form class="form-grid result-upload-form" method="post" action="/team-admin/results/upload" enctype="multipart/form-data" data-result-form>
           <label class="result-field result-field--full">Played fixture
             <select id="result-fixture-select" name="fixture_id" required>
               <option value="">Select a played fixture</option>
               {% for fixture in played_fixtures %}
-                <option value="{{ fixture.fixture_id }}" data-played-on="{{ fixture.fixture_date.strftime('%Y-%m-%d %H:%M') }}" data-home="{{ fixture.home_team.team_name }}" data-away="{{ fixture.away_team.team_name }}">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</option>
+                <option
+                  value="{{ fixture.fixture_id }}"
+                  data-home-score="{{ fixture.latest_result_submission.home_score if fixture.latest_result_submission else '' }}"
+                  data-away-score="{{ fixture.latest_result_submission.away_score if fixture.latest_result_submission else '' }}"
+                  data-result-status="{{ fixture.latest_result_status or '' }}"
+                  data-rejection-reason="{{ fixture.latest_result_rejection_reason or '' }}"
+                >{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</option>
               {% endfor %}
             </select>
-            <p class="section-copy">Choose the fixture first so scorer and assist dropdowns load the eligible players for that match category.</p>
           </label>
           <div class="form-grid two">
             <label>Home score
@@ -1878,57 +1552,13 @@
               <input id="result-away-score" name="away_score" type="number" min="0" inputmode="numeric" required>
             </label>
           </div>
-          <div class="result-team-grid">
-            <div class="result-team-column">
-              <div class="result-goal-block">
-                <div class="result-goal-block__head">
-                  <div>
-                    <h3>Home Team Scorers AND Goal Types</h3>
-                    <p class="section-copy">Use players from the home team. Every scored goal gets one scorer and one goal type.</p>
-                  </div>
-                  
-                </div>
-                <div class="result-goal-rows" data-result-goal-rows="home-scorers"></div>
-              </div>
-              <div class="result-goal-block result-goal-block--assist">
-                <div class="result-goal-block__head">
-                  <div>
-                    <h3>Home Team Assisters</h3>
-                    <p class="section-copy">Leave blank when a goal has no assist, such as a penalty or direct free kick.</p>
-                  </div>
-                  
-                </div>
-                <div class="result-goal-rows" data-result-goal-rows="home-assists"></div>
-              </div>
-            </div>
-            <div class="result-team-column">
-              <div class="result-goal-block">
-                <div class="result-goal-block__head">
-                  <div>
-                    <h3>Away Team Scorers AND Goal Types</h3>
-                    <p class="section-copy">Use players from the away team. Every scored goal gets one scorer and one goal type.</p>
-                  </div>
-                  
-                </div>
-                <div class="result-goal-rows" data-result-goal-rows="away-scorers"></div>
-              </div>
-              <div class="result-goal-block result-goal-block--assist">
-                <div class="result-goal-block__head">
-                  <div>
-                    <h3>Away Team Assisters</h3>
-                    <p class="section-copy">Leave blank when a goal has no assist, such as a penalty or direct free kick.</p>
-                  </div>
-                  
-                </div>
-                <div class="result-goal-rows" data-result-goal-rows="away-assists"></div>
-              </div>
-            </div>
-          </div>
-          <input type="hidden" name="scorer_names_text" id="result-scorer-names">
-          <input type="hidden" name="goal_types_text" id="result-goal-types">
-          <input type="hidden" name="assist_names_text" id="result-assist-names">
+          <label class="result-field result-field--full">Scorers and assisters file
+            <input id="result-upload-file" name="file" type="file" accept=".csv,.txt" required>
+            <p class="section-copy">Upload a CSV or text file with one goal per line. Include the side, scorer, assister, and goal type for each goal.</p>
+          </label>
+          <div class="alert" data-result-status-note hidden style="margin: 0 0 0.5rem 0;"></div>
           <div class="form-actions wide">
-            <button class="button button-success" type="submit">Save Result</button>
+            <button class="button button-success" type="submit">Upload Scorers and Assisters</button>
           </div>
         </form>
         {% else %}
@@ -1947,6 +1577,7 @@
               <th>Status</th>
               <th>Scorers</th>
               <th>Assists</th>
+              <th>Review</th>
             </tr>
           </thead>
           <tbody>
@@ -1957,6 +1588,7 @@
             {% set submission_away_team = submission_fixture.away_team if submission_fixture and submission_fixture.away_team else None %}
             {% set submission_category = submission_fixture.category.category_name if submission_fixture and submission_fixture.category else 'uncategorized' %}
             {% set submitted_by_name = submission.submitted_by.user.full_name if submission.submitted_by and submission.submitted_by.user else '-' %}
+            {% set reviewed_by_name = submission.verification.verified_by.user.full_name if submission.verification and submission.verification.verified_by and submission.verification.verified_by.user else '-' %}
             <tr data-row data-status="{{ submission.status }}" data-category="{{ submission_category }}">
               <td data-label="Fixture">{{ submission_home_team.team_name if submission_home_team else 'Unknown fixture' }} vs {{ submission_away_team.team_name if submission_away_team else 'Unknown fixture' }}</td>
               <td data-label="Set By">{{ submitted_by_name }}</td>
@@ -1965,9 +1597,18 @@
               <td data-label="Status"><span class="status {{ submission.status }}">{{ submission.status }}</span></td>
               <td data-label="Scorers">{{ submission.scorer_names_text or '-' }}</td>
               <td data-label="Assists">{{ submission.assist_names_text or '-' }}</td>
+              <td data-label="Review">
+                {% if submission.verification and submission.verification.decision == 'rejected' %}
+                  Rejected by {{ reviewed_by_name }}: {{ submission.verification.rejection_reason or '-' }}
+                {% elif submission.verification %}
+                  Approved by {{ reviewed_by_name }}
+                {% else %}
+                  Pending review
+                {% endif %}
+              </td>
             </tr>
             {% else %}
-            <tr><td colspan="7" class="empty">No submissions yet.</td></tr>
+            <tr><td colspan="8" class="empty">No submissions yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
