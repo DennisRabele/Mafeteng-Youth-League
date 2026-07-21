@@ -37,6 +37,17 @@
           </form>
         </nav>
       {% elif current_user and current_user.role == 'team_admin' and app_mode != 'super_admin' %}
+        <nav class="topnav">
+          {% if current_user.team_admin_profile and current_user.team_admin_profile.status == 'approved' %}
+            <a data-loading-trigger href="/team-admin/dashboard">Dashboard</a>
+            <a data-loading-trigger href="/team-admin/account">My Account</a>
+          {% else %}
+            <a data-loading-trigger href="/team-admin/account">My Account</a>
+          {% endif %}
+          <form data-loading-form method="post" action="/logout">
+            <button class="button button-outline" type="submit">Logout</button>
+          </form>
+        </nav>
       {% elif app_mode == 'super_admin' and not hide_public_auth_nav %}
         <nav class="topnav">
           <a data-loading-trigger class="active" href="/">Home</a>
