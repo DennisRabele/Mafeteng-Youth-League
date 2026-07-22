@@ -630,6 +630,10 @@ def verify_match_result(
     else:
         _clear_match_result_state(db, match)
 
+    db.flush()
+    db.commit()
+    db.refresh(submission)
+
     if decision == ApprovalStatus.APPROVED.value:
         notify_team_admins_for_teams(
             db,
@@ -672,7 +676,6 @@ def verify_match_result(
             "/super-admin#results",
         )
 
-    db.commit()
     db.refresh(submission)
     return submission
 

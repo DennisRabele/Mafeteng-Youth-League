@@ -49,8 +49,9 @@ from app.services.team_access import (
     load_team_admin_approved_teams,
     load_team_admin_owned_approved_teams,
 )
-from app.services.league import create_fixture
+from app.services.league import get_player_performances
 from app.services.league import submit_match_result
+from app.services.league import verify_match_result
 from app.web.routes import _load_result_fixture_players
 import app.web.routes as routes
 
@@ -270,6 +271,186 @@ def test_approved_team_admins_can_see_their_linked_team_code_and_access():
     colleague_teams = load_team_admin_approved_teams(db, colleague_admin.team_admin_id)
     assert len(colleague_teams) == 1
     assert colleague_teams[0].team_code == team.team_code
+
+
+def test_approved_result_updates_player_performances():
+    db = make_session()
+    category = seed_category(db)
+
+    home_admin = create_team_admin_registration(
+        db,
+        full_name="Home Admin",
+        team_name="Home FC",
+        email="home-admin@example.test",
+        password="Password123",
+        national_id="NID-HOME-PERF",
+        phone="+26650000040",
+        photo_path="/uploads/admin-photos/home-admin.png",
+    )
+    home_admin = approve_team_admin(db, home_admin.team_admin_id)
+    home_team = register_team(
+        db,
+        team_admin_id=home_admin.team_admin_id,
+        team_name="Home FC",
+        category_id=category.category_id,
+        contact_information="+26650000041",
+        team_address="Home Road",
+        training_ground="Home Ground",
+        home_ground="Home Stadium",
+        logo="/uploads/team-logos/home-fc.png",
+    )
+    home_team = approve_team(db, home_team.team_id)
+
+    away_admin = create_team_admin_registration(
+        db,
+        full_name="Away Admin",
+        team_name="Away FC",
+        email="away-admin@example.test",
+        password="Password123",
+        national_id="NID-AWAY-PERF",
+        phone="+26650000042",
+        photo_path="/uploads/admin-photos/away-admin.png",
+    )
+    away_admin = approve_team_admin(db, away_admin.team_admin_id)
+    away_team = register_team(
+        db,
+        team_admin_id=away_admin.team_admin_id,
+        team_name="Away FC",
+        category_id=category.category_id,
+        contact_information="+26650000043",
+        team_address="Away Road",
+        training_ground="Away Ground",
+        home_ground="Away Stadium",
+        logo="/uploads/team-logos/away-fc.png",
+    )
+    away_team = approve_team(db, away_team.team_id)
+
+    super_admin = create_super_admin_registration(
+        db,
+        full_name="Super Admin",
+        email="super@example.test",
+        password="Password123",
+        photo_path=None,
+    )
+
+    home_scorer = register_player(
+        db,
+        team_id=home_team.team_id,
+        full_name="Home Scorer",
+        gender="Male",
+        dob=years_ago(16),
+        nationality="Mosotho",
+        email="home-scorer@example.test",
+        residential_address="Home Address",
+        parent_name="Parent Home",
+        parent_contact="+26650000044",
+        school_name="Home School",
+        position="Forward",
+        agreement_form_path="/uploads/player-agreements/home-scorer.pdf",
+        photo_path=None,
+        documents=[],
+        registration_period=1,
+    )
+    home_scorer = approve_player(db, home_scorer.player_id)
+
+    home_assister = register_player(
+        db,
+        team_id=home_team.team_id,
+        full_name="Home Assister",
+        gender="Male",
+        dob=years_ago(16),
+        nationality="Mosotho",
+        email="home-assister@example.test",
+        residential_address="Home Address",
+        parent_name="Parent Home Two",
+        parent_contact="+26650000045",
+        school_name="Home School",
+        position="Midfielder",
+        agreement_form_path="/uploads/player-agreements/home-assister.pdf",
+        photo_path=None,
+        documents=[],
+        registration_period=1,
+    )
+    home_assister = approve_player(db, home_assister.player_id)
+
+    away_scorer = register_player(
+        db,
+        team_id=away_team.team_id,
+        full_name="Away Scorer",
+        gender="Male",
+        dob=years_ago(16),
+        nationality="Mosotho",
+        email="away-scorer@example.test",
+        residential_address="Away Address",
+        parent_name="Parent Away",
+        parent_contact="+26650000046",
+        school_name="Away School",
+        position="Forward",
+        agreement_form_path="/uploads/player-agreements/away-scorer.pdf",
+        photo_path=None,
+        documents=[],
+        registration_period=1,
+    )
+    away_scorer = approve_player(db, away_scorer.player_id)
+
+    fixture = Fixture(
+        season_id=category.season_id,
+        category_id=category.category_id,
+        home_team_id=home_team.team_id,
+        away_team_id=away_team.team_id,
+        fixture_date=datetime.utcnow() - timedelta(days=1),
+        venue="Performance Ground",
+        status="completed",
+    )
+    db.add(fixture)
+    db.flush()
+    db.add(
+        Match(
+            fixture_id=fixture.fixture_id,
+            match_date=fixture.fixture_date,
+            status="completed",
+            home_score=1,
+            away_score=0,
+        )
+    )
+    db.commit()
+
+    submission = submit_match_result(
+        db,
+        team_admin_id=home_admin.team_admin_id,
+        fixture_id=fixture.fixture_id,
+        home_score=1,
+        away_score=0,
+        scorer_names_text="Home Scorer",
+        goal_types_text="Open Play",
+        assist_names_text="Home Assister",
+    )
+    assert submission.status == ApprovalStatus.PENDING.value
+
+    performances_before = get_player_performances(db)
+    assert all(not rows for rows in performances_before.values())
+
+    verified = verify_match_result(
+        db,
+        submission_id=submission.submission_id,
+        super_admin_id=super_admin.admin_id,
+        home_score=1,
+        away_score=0,
+        scorer_names_text="Home Scorer",
+        goal_types_text="Open Play",
+        assist_names_text="Home Assister",
+        decision=ApprovalStatus.APPROVED.value,
+    )
+    assert verified.status == ApprovalStatus.APPROVED.value
+
+    performances = get_player_performances(db)
+    scorer_row = next(row for row in performances["scorers"] if row["player"].player_id == home_scorer.player_id)
+    assister_row = next(row for row in performances["assisters"] if row["player"].player_id == home_assister.player_id)
+
+    assert scorer_row["goals"] == 1
+    assert scorer_row["assists"] == 0
+    assert scorer_row["goal_types"] == {"Open Play": 1}
+    assert assister_row["assists"] == 1
 
 
 def test_approved_team_codes_are_backfilled_for_legacy_records():
