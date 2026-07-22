@@ -452,6 +452,38 @@ def test_approved_result_updates_player_performances():
     assert scorer_row["goal_types"] == {"Open Play": 1}
     assert assister_row["assists"] == 1
 
+    edited_submission = submit_match_result(
+        db,
+        team_admin_id=home_admin.team_admin_id,
+        fixture_id=fixture.fixture_id,
+        home_score=1,
+        away_score=0,
+        scorer_names_text="Home Assister",
+        goal_types_text="Penalty",
+        assist_names_text="",
+    )
+    assert edited_submission.status == ApprovalStatus.PENDING.value
+
+    reverified = verify_match_result(
+        db,
+        submission_id=edited_submission.submission_id,
+        super_admin_id=super_admin.admin_id,
+        home_score=1,
+        away_score=0,
+        scorer_names_text="Home Assister",
+        goal_types_text="Penalty",
+        assist_names_text="",
+        decision=ApprovalStatus.APPROVED.value,
+    )
+    assert reverified.status == ApprovalStatus.APPROVED.value
+
+    edited_performances = get_player_performances(db)
+    edited_scorer_row = next(
+        row for row in edited_performances["scorers"] if row["player"].player_id == home_assister.player_id
+    )
+    assert edited_scorer_row["goals"] == 1
+    assert edited_scorer_row["goal_types"] == {"Penalty": 1}
+
 
 def test_approved_team_codes_are_backfilled_for_legacy_records():
     db = make_session()
