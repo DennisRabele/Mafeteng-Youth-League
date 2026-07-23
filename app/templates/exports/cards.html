@@ -319,10 +319,11 @@
       gap: 16px;
     }
 
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand .fixture-logo-frame,
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand img,
-    .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand .fixture-logo-frame {
-      height: 72px;
-      width: 72px;
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team .fixture-logo-frame {
+      height: 88px;
+      width: 88px;
     }
 
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand-text {
@@ -331,14 +332,14 @@
     }
 
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand-text strong {
-      font-size: 30px;
+      font-size: 18px;
       line-height: 0.96;
       text-transform: uppercase;
     }
 
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__brand-text span {
       color: #ffd84d;
-      font-size: 30px;
+      font-size: 18px;
       font-weight: 900;
       line-height: 0.96;
       text-transform: uppercase;
@@ -351,7 +352,7 @@
 
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__title h1 {
       color: #fff;
-      font-size: 40px;
+      font-size: 36px;
       line-height: 0.95;
       margin: 0;
       text-transform: uppercase;
@@ -370,13 +371,13 @@
     }
 
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__season strong {
-      font-size: 30px;
+      font-size: 24px;
       line-height: 1;
     }
 
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__season span {
       display: block;
-      font-size: 18px;
+      font-size: 16px;
       line-height: 1;
     }
 
@@ -422,16 +423,33 @@
       min-width: 0;
     }
 
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team--away {
+      justify-content: flex-end;
+      text-align: right;
+    }
+
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team h2 {
-      font-size: 28px;
+      font-size: 24px;
       line-height: 1;
       margin: 6px 0 0;
       text-transform: uppercase;
     }
 
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team .fixture-logo-frame {
-      height: 72px;
-      width: 72px;
+      flex: 0 0 88px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team .fixture-logo {
+      object-fit: contain;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team--home {
+      justify-content: flex-start;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-team--away {
+      justify-content: flex-end;
+      text-align: right;
     }
 
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-ribbon {
@@ -462,26 +480,14 @@
       align-items: center;
       border-right: 1px solid #b6b6b6;
       display: grid;
-      gap: 8px;
-      grid-template-columns: 56px 1fr;
+      gap: 0;
+      grid-template-columns: 1fr;
       min-height: 96px;
       padding: 16px 18px;
     }
 
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-meta-item:last-child {
       border-right: 0;
-    }
-
-    .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-meta-icon {
-      align-items: center;
-      background: #ffc400;
-      border-radius: 6px;
-      color: #050505;
-      display: inline-flex;
-      font-size: 28px;
-      height: 56px;
-      justify-content: center;
-      width: 56px;
     }
 
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__fixture-meta-item strong {
@@ -518,9 +524,17 @@
       text-transform: uppercase;
     }
 
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table tbody tr:nth-child(odd) td {
+      background: #fff;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__table tbody tr:nth-child(even) td {
+      background: #f7f7f7;
+    }
+
     .export-page[data-export-kind="match_day_squad"] .squad-sheet__table td {
       border-top: 1px solid #b6b6b6;
-      color: #111;
+      color: #111 !important;
       padding: 10px 12px;
     }
 
@@ -601,6 +615,30 @@
       color: #444;
       font-size: 12px;
       margin-top: -6px;
+      text-transform: uppercase;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__league-heading {
+      align-items: center;
+      background: #050505;
+      color: #fff;
+      display: flex;
+      gap: 16px;
+      padding: 20px 24px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__league-heading .fixture-logo-frame {
+      flex: 0 0 84px;
+      height: 84px;
+      width: 84px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-sheet__league-heading h2 {
+      color: #fff;
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 0.95;
+      margin: 0;
       text-transform: uppercase;
     }
 
@@ -798,16 +836,11 @@
         <article class="squad-sheet">
           <div class="squad-sheet__banner">
             <div class="squad-sheet__brand">
-              {% if match_day_squad.team_logo_snapshot %}
-                <span class="fixture-logo-frame">
-                  <img class="fixture-logo" src="{{ match_day_squad.team_logo_snapshot }}" alt="{{ match_day_squad.team_name_snapshot }}">
-                </span>
-              {% else %}
-                <span class="fixture-logo fallback fixture-logo-frame">{{ match_day_squad.team_name_snapshot[:1] }}</span>
-              {% endif %}
+              <span class="fixture-logo-frame">
+                <img class="fixture-logo" src="/static/images/logo.jpg" alt="Mafeteng Youth Development League">
+              </span>
               <div class="squad-sheet__brand-text">
-                <strong>YOUTH</strong>
-                <span>DEVELOPMENT LEAGUE</span>
+                <strong>MAFETENG YOUTH DEVELOPMENT LEAGUE</strong>
               </div>
             </div>
             <div class="squad-sheet__title">
@@ -827,7 +860,7 @@
 
           <div class="squad-sheet__fixture">
             <div class="squad-sheet__fixture-top">
-              <div class="squad-sheet__fixture-team">
+              <div class="squad-sheet__fixture-team squad-sheet__fixture-team--home">
                 {% if match_day_squad.home_team_logo_snapshot %}
                   <span class="fixture-logo-frame"><img class="fixture-logo" src="{{ match_day_squad.home_team_logo_snapshot }}" alt="{{ match_day_squad.home_team_name_snapshot }}"></span>
                 {% else %}
@@ -839,7 +872,7 @@
                 </div>
               </div>
               <div class="squad-sheet__fixture-ribbon"><span>VS</span></div>
-              <div class="squad-sheet__fixture-team" style="justify-content:flex-end; text-align:right;">
+              <div class="squad-sheet__fixture-team squad-sheet__fixture-team--away">
                 <div>
                   <div class="squad-sheet__subtitle">Away Team</div>
                   <h2>{{ match_day_squad.away_team_name_snapshot }}</h2>
@@ -853,19 +886,15 @@
             </div>
             <div class="squad-sheet__fixture-meta">
               <div class="squad-sheet__fixture-meta-item">
-                <div class="squad-sheet__fixture-meta-icon">&#128205;</div>
                 <div><strong>Venue</strong><span>{{ match_day_squad.venue_snapshot }}</span></div>
               </div>
               <div class="squad-sheet__fixture-meta-item">
-                <div class="squad-sheet__fixture-meta-icon">&#128197;</div>
                 <div><strong>Date</strong><span>{{ match_day_squad.fixture_date_snapshot.strftime('%d %b %Y') }}</span></div>
               </div>
               <div class="squad-sheet__fixture-meta-item">
-                <div class="squad-sheet__fixture-meta-icon">&#128336;</div>
                 <div><strong>Time</strong><span>{{ match_day_squad.fixture_date_snapshot.strftime('%H:%M') }}</span></div>
               </div>
               <div class="squad-sheet__fixture-meta-item">
-                <div class="squad-sheet__fixture-meta-icon">&#128100;</div>
                 <div><strong>Generated By</strong><span>{{ match_day_squad.generated_by.user.full_name if match_day_squad.generated_by and match_day_squad.generated_by.user else 'Team Admin' }}</span></div>
               </div>
             </div>
