@@ -178,6 +178,22 @@ def _ensure_schema_columns() -> None:
                 if column_name not in result_columns:
                     connection.execute(text(statement))
 
+    if inspector.has_table("match_day_squads"):
+        squad_columns = {column["name"] for column in inspector.get_columns("match_day_squads")}
+        missing_squad_columns = {
+            "fixture_id": "ALTER TABLE match_day_squads ADD COLUMN fixture_id INTEGER REFERENCES fixtures(fixture_id)",
+            "fixture_date_snapshot": "ALTER TABLE match_day_squads ADD COLUMN fixture_date_snapshot TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL",
+            "venue_snapshot": "ALTER TABLE match_day_squads ADD COLUMN venue_snapshot VARCHAR(150) DEFAULT '' NOT NULL",
+            "home_team_name_snapshot": "ALTER TABLE match_day_squads ADD COLUMN home_team_name_snapshot VARCHAR(150) DEFAULT '' NOT NULL",
+            "home_team_logo_snapshot": "ALTER TABLE match_day_squads ADD COLUMN home_team_logo_snapshot VARCHAR(500)",
+            "away_team_name_snapshot": "ALTER TABLE match_day_squads ADD COLUMN away_team_name_snapshot VARCHAR(150) DEFAULT '' NOT NULL",
+            "away_team_logo_snapshot": "ALTER TABLE match_day_squads ADD COLUMN away_team_logo_snapshot VARCHAR(500)",
+        }
+        with engine.begin() as connection:
+            for column_name, statement in missing_squad_columns.items():
+                if column_name not in squad_columns:
+                    connection.execute(text(statement))
+
     if inspector.has_table("result_verifications"):
         verification_columns = {
             column["name"] for column in inspector.get_columns("result_verifications")

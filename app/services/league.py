@@ -236,6 +236,7 @@ def _category_age_group(category_name: str | None) -> str | None:
 def create_match_day_squad(
     db: Session,
     *,
+    fixture_id: int,
     team_id: int,
     generated_by_team_admin_id: int,
     player_ids: list[int],
@@ -243,6 +244,17 @@ def create_match_day_squad(
 ) -> MatchDaySquad:
     if not _has_table(db, "match_day_squads"):
         raise RegistrationError("Match day squads are not available yet.")
+    fixture = db.scalar(
+        select(Fixture)
+        .options(
+            selectinload(Fixture.category),
+            selectinload(Fixture.home_team).selectinload(Team.category),
+            selectinload(Fixture.away_team).selectinload(Team.category),
+        )
+        .where(Fixture.fixture_id == fixture_id)
+    )
+    if not fixture or not fixture.category or not fixture.home_team or not fixture.away_team:
+        raise RegistrationError("Selected fixture could not be found.")
     team = db.scalar(
         select(Team)
         .options(selectinload(Team.category), selectinload(Team.players))
@@ -253,6 +265,10 @@ def create_match_day_squad(
     )
     if not team or not team.category:
         raise RegistrationError("Selected team does not exist or is not approved.")
+    if team.team_id not in {fixture.home_team_id, fixture.away_team_id}:
+        raise RegistrationError("Selected team is not part of the chosen fixture.")
+    if team.category_id != fixture.category_id:
+        raise RegistrationError("Selected team does not match the fixture category.")
 
     category_age_group = _category_age_group(team.category.category_name)
     if not category_age_group:
@@ -290,11 +306,18 @@ def create_match_day_squad(
         eligible_players.append(player)
 
     squad = MatchDaySquad(
+        fixture_id=fixture.fixture_id,
         team_id=team.team_id,
         category_id=team.category_id,
         generated_by_team_admin_id=generated_by_team_admin_id,
         generated_at=datetime.utcnow(),
         verified_at=datetime.utcnow(),
+        fixture_date_snapshot=fixture.fixture_date,
+        venue_snapshot=fixture.venue,
+        home_team_name_snapshot=fixture.home_team.team_name,
+        home_team_logo_snapshot=fixture.home_team.logo,
+        away_team_name_snapshot=fixture.away_team.team_name,
+        away_team_logo_snapshot=fixture.away_team.logo,
         team_name_snapshot=team.team_name,
         team_logo_snapshot=team.logo,
         category_name_snapshot=team.category.category_name,
@@ -325,6 +348,9 @@ def get_match_day_squad(db: Session, squad_id: int) -> MatchDaySquad | None:
     return db.scalar(
         select(MatchDaySquad)
         .options(
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.category),
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.home_team),
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.away_team),
             selectinload(MatchDaySquad.team).selectinload(Team.category),
             selectinload(MatchDaySquad.generated_by).selectinload(TeamAdmin.user),
             selectinload(MatchDaySquad.members).selectinload(MatchDaySquadMember.player).selectinload(Player.team),
@@ -339,6 +365,9 @@ def get_team_admin_match_day_squads(db: Session, team_ids: Iterable[int]) -> lis
     return db.scalars(
         select(MatchDaySquad)
         .options(
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.category),
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.home_team),
+            selectinload(MatchDaySquad.fixture).selectinload(Fixture.away_team),
             selectinload(MatchDaySquad.team).selectinload(Team.category),
             selectinload(MatchDaySquad.generated_by).selectinload(TeamAdmin.user),
             selectinload(MatchDaySquad.members),

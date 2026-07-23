@@ -1791,6 +1791,31 @@ def team_admin_dashboard(
         }
         for player in approved_players
     ]
+    match_day_fixtures_data = [
+        {
+            "fixture_id": fixture.fixture_id,
+            "category_id": fixture.category_id,
+            "category_name": fixture.category.category_name if fixture.category else "-",
+            "fixture_date": fixture.fixture_date.strftime("%Y-%m-%d %H:%M"),
+            "dashboard_date_day": fixture.dashboard_date_day,
+            "dashboard_date_month": fixture.dashboard_date_month,
+            "dashboard_date_year": fixture.dashboard_date_year,
+            "dashboard_time": fixture.dashboard_time,
+            "dashboard_day_name": fixture.dashboard_day_name,
+            "venue": fixture.venue,
+            "home_team": {
+                "team_id": fixture.home_team.team_id if fixture.home_team else None,
+                "team_name": fixture.home_team.team_name if fixture.home_team else "-",
+                "logo": fixture.home_team.logo if fixture.home_team else None,
+            },
+            "away_team": {
+                "team_id": fixture.away_team.team_id if fixture.away_team else None,
+                "team_name": fixture.away_team.team_name if fixture.away_team else "-",
+                "logo": fixture.away_team.logo if fixture.away_team else None,
+            },
+        }
+        for fixture in _safe_dashboard_value(lambda: _load_fixtures(db, team_ids=approved_team_ids), [])
+    ]
     match_day_squads = get_team_admin_match_day_squads(db, approved_team_ids)
     renewal_requests = db.scalars(
         select(PlayerRegistrationRequest)
@@ -1945,10 +1970,12 @@ def team_admin_dashboard(
             "teams": teams,
             "approved_teams": approved_teams,
             "approved_team": approved_team,
+            "approved_team_ids": approved_team_ids,
             "can_register_clubs": can_register_clubs,
             "players": players,
             "approved_players": approved_players,
             "match_day_players_data": match_day_players_data,
+            "match_day_fixtures_data": match_day_fixtures_data,
             "match_day_squads": match_day_squads,
             "renewal_requests": renewal_requests,
             "transfer_target_teams": transfer_target_teams,
@@ -2018,6 +2045,7 @@ def export_team_admin_fixtures(
 @router.post("/team-admin/match-day-squads")
 def create_team_admin_match_day_squad(
     request: Request,
+    fixture_id: int = Form(...),
     squad_team_id: int = Form(...),
     player_ids: list[int] = Form(...),
     jersey_numbers: list[int] = Form(...),
@@ -2034,6 +2062,7 @@ def create_team_admin_match_day_squad(
     try:
         squad = create_match_day_squad(
             db,
+            fixture_id=fixture_id,
             team_id=squad_team_id,
             generated_by_team_admin_id=team_admin.team_admin_id,
             player_ids=player_ids,

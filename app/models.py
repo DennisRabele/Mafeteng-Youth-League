@@ -569,6 +569,7 @@ class MatchDaySquad(Base):
     __tablename__ = "match_day_squads"
 
     squad_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.fixture_id"))
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.team_id"))
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.category_id"))
     generated_by_team_admin_id: Mapped[int] = mapped_column(
@@ -578,10 +579,17 @@ class MatchDaySquad(Base):
     verified_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     downloaded_at: Mapped[datetime | None] = mapped_column(DateTime)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    fixture_date_snapshot: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    venue_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
+    home_team_name_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
+    home_team_logo_snapshot: Mapped[str | None] = mapped_column(String(500))
+    away_team_name_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
+    away_team_logo_snapshot: Mapped[str | None] = mapped_column(String(500))
     team_name_snapshot: Mapped[str] = mapped_column(String(150), nullable=False)
     team_logo_snapshot: Mapped[str | None] = mapped_column(String(500))
     category_name_snapshot: Mapped[str] = mapped_column(String(80), nullable=False)
 
+    fixture: Mapped[Fixture] = relationship()
     team: Mapped[Team] = relationship(back_populates="match_day_squads")
     category: Mapped[Category] = relationship()
     generated_by: Mapped[TeamAdmin] = relationship(back_populates="match_day_squads")

@@ -1633,6 +1633,176 @@ body[data-app-mode="team_admin"] .transfer-list article small {
   height: 40px;
 }
 
+.matchday-preview {
+  background: #0f0f0f;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.matchday-preview__head {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.matchday-preview__date {
+  display: grid;
+  gap: 2px;
+}
+
+.matchday-preview__date strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.matchday-preview__meta {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
+.matchday-preview__meta span,
+.matchday-preview__date span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.matchday-preview__teams {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.matchday-preview__team {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.matchday-preview__team strong {
+  display: block;
+  font-size: 18px;
+}
+
+.matchday-preview__team small {
+  color: var(--muted);
+}
+
+.matchday-preview__vs {
+  color: var(--yellow);
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+}
+
+.matchday-preview .fixture-logo-frame {
+  flex-basis: 42px;
+  height: 42px;
+  width: 42px;
+}
+
+.matchday-preview .fixture-logo {
+  height: 100%;
+  width: 100%;
+}
+
+.matchday-squad-sheet {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.matchday-squad-sheet__head,
+.matchday-squad-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr) minmax(90px, 0.6fr) minmax(110px, 0.6fr) minmax(90px, 0.5fr);
+}
+
+.matchday-squad-sheet__head {
+  background: #111;
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  padding: 12px 14px;
+  text-transform: uppercase;
+}
+
+.matchday-squad-list {
+  display: grid;
+}
+
+.matchday-squad-row {
+  background: #fdfdfd;
+  border-top: 1px solid var(--line);
+  color: #111;
+  padding: 12px 14px;
+}
+
+.matchday-squad-row:first-child {
+  border-top: 0;
+}
+
+.matchday-squad-cell {
+  min-width: 0;
+}
+
+.matchday-squad-cell--name {
+  font-weight: 800;
+}
+
+.matchday-squad-cell--jersey input {
+  width: 100%;
+}
+
+.matchday-squad-cell--action {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.matchday-squad-empty {
+  color: var(--muted);
+  padding: 14px;
+}
+
+@media (max-width: 720px) {
+  .matchday-preview__head,
+  .matchday-preview__teams {
+    grid-template-columns: 1fr;
+  }
+
+  .matchday-preview__head {
+    display: grid;
+  }
+
+  .matchday-preview__meta {
+    text-align: left;
+  }
+
+  .matchday-squad-sheet__head {
+    display: none;
+  }
+
+  .matchday-squad-row {
+    grid-template-columns: 1fr;
+  }
+
+  .matchday-squad-cell--action {
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 720px) {
   .squad-row {
     grid-template-columns: 1fr;

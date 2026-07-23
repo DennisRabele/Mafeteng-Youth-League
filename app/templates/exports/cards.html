@@ -288,6 +288,77 @@
       gap: 16px;
     }
 
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary {
+      background: #0f0f0f;
+      border: 1px solid rgba(255, 196, 0, 0.14);
+      border-radius: 14px;
+      display: grid;
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__date {
+      display: grid;
+      gap: 3px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__date strong {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__date span,
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__meta {
+      color: #c8c8c8;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__meta {
+      display: grid;
+      gap: 4px;
+      text-align: right;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__teams {
+      align-items: center;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__team {
+      align-items: center;
+      display: flex;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__team strong {
+      font-size: 20px;
+      line-height: 1.1;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__team small {
+      color: #c8c8c8;
+      display: block;
+      margin-top: 3px;
+    }
+
+    .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__vs {
+      color: var(--yellow);
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+    }
+
     .export-page[data-export-kind="match_day_squad"] .squad-export-head {
       align-items: center;
       display: flex;
@@ -405,6 +476,14 @@
       .export-page[data-export-kind="match_day_squad"] .squad-export-meta {
         text-align: left;
       }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__teams {
+        grid-template-columns: 1fr;
+      }
+
+      .export-page[data-export-kind="match_day_squad"] .squad-fixture-summary__vs {
+        text-align: center;
+      }
     }
 
     @media print {
@@ -504,6 +583,43 @@
     {% elif export_kind == 'match_day_squad' %}
       <section class="export-section">
         <article class="export-card squad-export-card">
+          <div class="squad-fixture-summary">
+            <div class="squad-fixture-summary__top">
+              <div class="squad-fixture-summary__date">
+                <strong>{{ match_day_squad.fixture_date_snapshot.strftime('%d %b %Y') }}</strong>
+                <span>{{ match_day_squad.fixture_date_snapshot.strftime('%I:%M %p').lstrip('0') }} · {{ match_day_squad.fixture_date_snapshot.strftime('%a') }}</span>
+              </div>
+              <div class="squad-fixture-summary__meta">
+                <span>Venue: {{ match_day_squad.venue_snapshot }}</span>
+                <span>Category: {{ match_day_squad.category_name_snapshot }}</span>
+              </div>
+            </div>
+            <div class="squad-fixture-summary__teams">
+              <div class="squad-fixture-summary__team">
+                {% if match_day_squad.home_team_logo_snapshot %}
+                  <span class="fixture-logo-frame"><img class="fixture-logo" src="{{ match_day_squad.home_team_logo_snapshot }}" alt="{{ match_day_squad.home_team_name_snapshot }}"></span>
+                {% else %}
+                  <span class="fixture-logo fallback fixture-logo-frame">{{ match_day_squad.home_team_name_snapshot[:1] }}</span>
+                {% endif %}
+                <div>
+                  <strong>{{ match_day_squad.home_team_name_snapshot }}</strong>
+                  <small>Home</small>
+                </div>
+              </div>
+              <div class="squad-fixture-summary__vs">VS</div>
+              <div class="squad-fixture-summary__team" style="justify-content: flex-end; text-align: right;">
+                <div>
+                  <strong>{{ match_day_squad.away_team_name_snapshot }}</strong>
+                  <small>Away</small>
+                </div>
+                {% if match_day_squad.away_team_logo_snapshot %}
+                  <span class="fixture-logo-frame"><img class="fixture-logo" src="{{ match_day_squad.away_team_logo_snapshot }}" alt="{{ match_day_squad.away_team_name_snapshot }}"></span>
+                {% else %}
+                  <span class="fixture-logo fallback fixture-logo-frame">{{ match_day_squad.away_team_name_snapshot[:1] }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
           <div class="squad-export-head">
             <div class="squad-export-team">
               {% if match_day_squad.team_logo_snapshot %}

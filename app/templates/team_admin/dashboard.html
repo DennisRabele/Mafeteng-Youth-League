@@ -1505,33 +1505,89 @@
       <div class="panel-heading">
         <div>
           <h2>Match Day Squad</h2>
-          <p class="section-copy"><strong>Pick one approved club category, add only eligible players, and the squad card will download automatically after verification.</strong></p>
+          <p class="section-copy"><strong>Select a fixture first. The squad sheet will lock to that match and only allow eligible players from the correct team category.</strong></p>
         </div>
       </div>
 
-      {% if approved_teams %}
+      {% if approved_teams and match_day_fixtures_data %}
         <form class="match-day-squad-form" method="post" action="/team-admin/match-day-squads" data-match-day-squad-form>
           <div class="form-grid two">
-            <label>Team Category
-              <select name="squad_team_id" id="match-day-team-select" required>
-                <option value="">Select approved club category</option>
-                {% for team in approved_teams %}
-                  <option value="{{ team.team_id }}" data-category="{{ team.category.category_name }}" data-team-name="{{ team.team_name }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+            <label>Fixture
+              <select name="fixture_id" id="match-day-fixture-select" required>
+                <option value="">Select fixture</option>
+                {% for fixture in match_day_fixtures_data %}
+                  <option value="{{ fixture.fixture_id }}">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }} - {{ fixture.dashboard_date_day }} {{ fixture.dashboard_date_month }} {{ fixture.dashboard_date_year }}</option>
                 {% endfor %}
               </select>
             </label>
-            <label>Squad Date
-              <input type="text" value="{{ now.strftime('%Y-%m-%d') if now else '' }}" readonly>
+            <label>Squad Team
+              <select name="squad_team_id" id="match-day-team-select" required disabled>
+                <option value="">Select fixture first</option>
+              </select>
             </label>
           </div>
 
+          <article class="matchday-preview" data-matchday-preview hidden>
+            <div class="matchday-preview__head">
+              <div class="matchday-preview__date">
+                <strong data-fixture-date></strong>
+                <span data-fixture-time></span>
+              </div>
+              <div class="matchday-preview__meta">
+                <span data-fixture-venue></span>
+                <span data-fixture-category></span>
+              </div>
+            </div>
+            <div class="matchday-preview__teams">
+              <div class="matchday-preview__team">
+                <span class="fixture-logo-frame" data-home-logo-frame></span>
+                <div>
+                  <strong data-home-team-name></strong>
+                  <small>Home</small>
+                </div>
+              </div>
+              <div class="matchday-preview__vs">VS</div>
+              <div class="matchday-preview__team">
+                <span class="fixture-logo-frame" data-away-logo-frame></span>
+                <div>
+                  <strong data-away-team-name></strong>
+                  <small>Away</small>
+                </div>
+              </div>
+            </div>
+          </article>
+
           <div class="squad-builder">
             <div class="squad-builder__head">
-              <h3>Players</h3>
-              <button class="button button-primary small" type="button" data-add-squad-row>Add Player</button>
+              <h3>Add Player</h3>
+              <span class="section-copy">Added players move into the squad list and cannot be selected again until removed.</span>
             </div>
-            <p class="section-copy" style="margin-top: 0;">Select a player name to auto-fill player ID and age group, then enter a jersey number.</p>
-            <div class="squad-rows" data-squad-rows></div>
+            <div class="form-grid three">
+              <label>Player Name
+                <select id="match-day-player-select" disabled>
+                  <option value="">Select fixture and team first</option>
+                </select>
+              </label>
+              <label>Jersey Number
+                <input id="match-day-jersey-input" type="number" min="1" max="99" disabled>
+              </label>
+              <div class="form-actions wide" style="align-self:end;">
+                <button class="button button-primary" type="button" data-add-player disabled>Add to List</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="matchday-squad-sheet">
+            <div class="matchday-squad-sheet__head">
+              <span>Player</span>
+              <span>Player ID</span>
+              <span>Age</span>
+              <span>Jersey #</span>
+              <span>Action</span>
+            </div>
+            <div class="matchday-squad-list" data-squad-list>
+              <div class="matchday-squad-empty">No players added yet.</div>
+            </div>
           </div>
 
           <div class="form-actions wide">
@@ -1539,103 +1595,187 @@
           </div>
         </form>
 
+        <script type="application/json" id="match-day-fixture-data">{{ match_day_fixtures_data | tojson }}</script>
         <script type="application/json" id="match-day-player-data">{{ match_day_players_data | tojson }}</script>
+        <script type="application/json" id="match-day-approved-team-ids">{{ approved_team_ids | tojson }}</script>
         <script>
           (function () {
             const form = document.querySelector("[data-match-day-squad-form]");
+            if (!form) {
+              return;
+            }
+            const fixtureSelect = document.getElementById("match-day-fixture-select");
             const teamSelect = document.getElementById("match-day-team-select");
-            const rows = document.querySelector("[data-squad-rows]");
-            const addRowButton = document.querySelector("[data-add-squad-row]");
-            const playerDataNode = document.getElementById("match-day-player-data");
-            const playerData = playerDataNode ? JSON.parse(playerDataNode.textContent || "[]") : [];
+            const playerSelect = document.getElementById("match-day-player-select");
+            const jerseyInput = document.getElementById("match-day-jersey-input");
+            const addButton = document.querySelector("[data-add-player]");
+            const squadList = document.querySelector("[data-squad-list]");
+            const preview = document.querySelector("[data-matchday-preview]");
+            const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
+            const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
+            const approvedTeamIds = new Set(JSON.parse(document.getElementById("match-day-approved-team-ids")?.textContent || "[]").map((value) => String(value)));
+            const selectedPlayerIds = new Set();
+            let activeFixture = null;
+            let activeTeamId = "";
 
-            const renderRow = () => {
+            const clearSquadList = () => {
+              selectedPlayerIds.clear();
+              squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
+            };
+
+            const updateEmptyState = () => {
+              if (!squadList.querySelector("[data-squad-row]")) {
+                squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
+              }
+            };
+
+            const setLogoFrame = (frame, logo, name) => {
+              if (!frame) return;
+              if (logo) {
+                frame.innerHTML = `<img class="fixture-logo" src="${logo}" alt="${name}">`;
+              } else {
+                frame.innerHTML = `<span class="fixture-logo fallback fixture-logo-frame">${(name || "?").slice(0, 1)}</span>`;
+              }
+            };
+
+            const renderPreview = () => {
+              if (!preview || !activeFixture) {
+                preview.hidden = true;
+                return;
+              }
+              preview.hidden = false;
+              preview.querySelector("[data-fixture-date]").textContent = `${activeFixture.dashboard_date_day} ${activeFixture.dashboard_date_month} ${activeFixture.dashboard_date_year}`;
+              preview.querySelector("[data-fixture-time]").textContent = `${activeFixture.dashboard_time} | ${activeFixture.dashboard_day_name}`;
+              preview.querySelector("[data-fixture-venue]").textContent = `Venue: ${activeFixture.venue}`;
+              preview.querySelector("[data-fixture-category]").textContent = activeFixture.category_name;
+              preview.querySelector("[data-home-team-name]").textContent = activeFixture.home_team.team_name;
+              preview.querySelector("[data-away-team-name]").textContent = activeFixture.away_team.team_name;
+              setLogoFrame(preview.querySelector("[data-home-logo-frame]"), activeFixture.home_team.logo, activeFixture.home_team.team_name);
+              setLogoFrame(preview.querySelector("[data-away-logo-frame]"), activeFixture.away_team.logo, activeFixture.away_team.team_name);
+            };
+
+            const populateTeamSelect = () => {
+              teamSelect.innerHTML = '<option value="">Select a team</option>';
+              teamSelect.disabled = true;
+              activeTeamId = "";
+              playerSelect.disabled = true;
+              addButton.disabled = true;
+              jerseyInput.disabled = true;
+              playerSelect.innerHTML = '<option value="">Select fixture and team first</option>';
+              if (!activeFixture) {
+                return;
+              }
+              const teams = [activeFixture.home_team, activeFixture.away_team]
+                .filter((team) => team && approvedTeamIds.has(String(team.team_id)));
+              teams.forEach((team) => {
+                const option = document.createElement("option");
+                option.value = team.team_id;
+                option.textContent = team.team_name;
+                teamSelect.appendChild(option);
+              });
+              teamSelect.disabled = teams.length === 0;
+              if (teams.length === 1) {
+                teamSelect.value = String(teams[0].team_id);
+                activeTeamId = teamSelect.value;
+              }
+              jerseyInput.value = "";
+              refreshPlayerSelect();
+            };
+
+            const refreshPlayerSelect = () => {
+              playerSelect.innerHTML = '<option value="">Select player</option>';
+              const selectedFixture = activeFixture;
+              const selectedTeamId = teamSelect.value;
+              const eligiblePlayers = playerData.filter((player) => {
+                return selectedFixture && selectedTeamId && String(player.team_id) === String(selectedTeamId) && !selectedPlayerIds.has(String(player.player_id));
+              });
+              eligiblePlayers.forEach((player) => {
+                const option = document.createElement("option");
+                option.value = player.player_id;
+                option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group})`;
+                option.dataset.playerCode = player.player_code;
+                option.dataset.ageGroup = player.age_group;
+                option.dataset.teamName = player.team_name;
+                playerSelect.appendChild(option);
+              });
+              const enabled = Boolean(selectedFixture && selectedTeamId);
+              playerSelect.disabled = !enabled;
+              jerseyInput.disabled = !enabled;
+              addButton.disabled = !enabled;
+            };
+
+            const addPlayerRow = () => {
+              const playerId = playerSelect.value;
+              const selectedOption = playerSelect.selectedOptions[0];
+              const jerseyNumber = jerseyInput.value.trim();
+              if (!playerId || !selectedOption || !jerseyNumber) {
+                return;
+              }
+              if (selectedPlayerIds.has(playerId)) {
+                return;
+              }
+              const playerName = selectedOption.textContent;
+              const playerCode = selectedOption.dataset.playerCode || "";
+              const ageGroup = selectedOption.dataset.ageGroup || "";
+              if (squadList.querySelector(".matchday-squad-empty")) {
+                squadList.innerHTML = "";
+              }
               const row = document.createElement("div");
-              row.className = "squad-row";
+              row.className = "matchday-squad-row";
               row.dataset.squadRow = "true";
+              row.dataset.playerId = playerId;
               row.innerHTML = `
-                <label>Player Name
-                  <select name="player_ids" data-squad-player-select required>
-                    <option value="">Select player</option>
-                  </select>
+                <span class="matchday-squad-cell matchday-squad-cell--name">${playerName}</span>
+                <span class="matchday-squad-cell">${playerCode}</span>
+                <span class="matchday-squad-cell">${ageGroup}</span>
+                <label class="matchday-squad-cell matchday-squad-cell--jersey">
+                  <input name="jersey_numbers" type="number" min="1" max="99" value="${jerseyNumber}" required>
                 </label>
-                <label>Player ID
-                  <input type="text" data-squad-player-code readonly>
-                </label>
-                <label>Age
-                  <input type="text" data-squad-player-age readonly>
-                </label>
-                <label>Jersey Number
-                  <input name="jersey_numbers" type="number" min="1" max="99" required>
-                </label>
-                <button class="button button-muted small squad-row__remove" type="button">Remove</button>
+                <div class="matchday-squad-cell matchday-squad-cell--action">
+                  <button class="button button-muted small" type="button">Remove</button>
+                  <input type="hidden" name="player_ids" value="${playerId}">
+                </div>
               `;
-              return row;
-            };
-
-            const fillPlayers = (row) => {
-              const select = row.querySelector("[data-squad-player-select]");
-              if (!select) {
-                return;
-              }
-              const selectedTeamId = teamSelect?.value || "";
-              const previousValue = select.value;
-              select.innerHTML = '<option value="">Select player</option>';
-              if (!selectedTeamId) {
-                syncRow(row);
-                return;
-              }
-              playerData
-                .filter((player) => String(player.team_id) === String(selectedTeamId))
-                .forEach((player) => {
-                  const option = document.createElement("option");
-                  option.value = player.player_id;
-                  option.textContent = `${player.full_name} - ${player.team_name} (${player.age_group})`;
-                  option.dataset.playerCode = player.player_code;
-                  option.dataset.ageGroup = player.age_group;
-                  select.appendChild(option);
-                });
-              if (previousValue) {
-                select.value = previousValue;
-              }
-            };
-
-            const syncRow = (row) => {
-              const select = row.querySelector("[data-squad-player-select]");
-              const code = row.querySelector("[data-squad-player-code]");
-              const age = row.querySelector("[data-squad-player-age]");
-              const selectedOption = select?.selectedOptions?.[0];
-              if (code) {
-                code.value = selectedOption?.dataset.playerCode || "";
-              }
-              if (age) {
-                age.value = selectedOption?.dataset.ageGroup || "";
-              }
-            };
-
-            const addRow = () => {
-              const row = renderRow();
-              rows.appendChild(row);
-              fillPlayers(row);
-              row.querySelector("[data-squad-player-select]")?.addEventListener("change", () => syncRow(row));
-              row.querySelector(".squad-row__remove")?.addEventListener("click", () => {
-                if (rows.querySelectorAll("[data-squad-row]").length > 1) {
-                  row.remove();
-                }
+              row.querySelector("button")?.addEventListener("click", () => {
+                selectedPlayerIds.delete(playerId);
+                row.remove();
+                updateEmptyState();
+                refreshPlayerSelect();
               });
+              squadList.appendChild(row);
+              selectedPlayerIds.add(playerId);
+              playerSelect.value = "";
+              jerseyInput.value = "";
+              refreshPlayerSelect();
             };
 
-            teamSelect?.addEventListener("change", () => {
-              rows.querySelectorAll("[data-squad-row]").forEach((row) => {
-                fillPlayers(row);
-                syncRow(row);
-              });
+            fixtureSelect.addEventListener("change", () => {
+              activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
+              clearSquadList();
+              renderPreview();
+              populateTeamSelect();
             });
 
-            addRowButton?.addEventListener("click", addRow);
-            addRow();
-            form?.addEventListener("submit", () => {
-              rows.querySelectorAll("[data-squad-row]").forEach(syncRow);
+            teamSelect.addEventListener("change", () => {
+              activeTeamId = teamSelect.value;
+              clearSquadList();
+              refreshPlayerSelect();
+            });
+
+            addButton.addEventListener("click", addPlayerRow);
+            playerSelect.addEventListener("change", () => {
+              jerseyInput.focus();
+            });
+
+            form.addEventListener("submit", (event) => {
+              if (!activeFixture || !teamSelect.value) {
+                event.preventDefault();
+                return;
+              }
+              if (!squadList.querySelector("[data-squad-row]")) {
+                event.preventDefault();
+                return;
+              }
             });
           })();
         </script>
@@ -1647,14 +1787,14 @@
           <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
             <table>
               <thead>
-                <tr><th>Team</th><th>Generated</th><th>Verified</th><th>Download</th></tr>
+                <tr><th>Fixture</th><th>Team</th><th>Generated</th><th>Download</th></tr>
               </thead>
               <tbody>
                 {% for squad in match_day_squads %}
                   <tr>
+                    <td>{{ squad.home_team_name_snapshot }} vs {{ squad.away_team_name_snapshot }} - {{ squad.venue_snapshot }}</td>
                     <td>{{ squad.team_name_snapshot }} - {{ squad.category_name_snapshot }}</td>
                     <td>{{ squad.generated_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                    <td>{{ squad.verified_at.strftime('%Y-%m-%d %H:%M') if squad.verified_at else '-' }}</td>
                     <td><a class="button button-primary small" href="/team-admin/dashboard/match-day-squads/{{ squad.squad_id }}/export">Download Squad Card</a></td>
                   </tr>
                 {% endfor %}
@@ -1663,7 +1803,7 @@
           </div>
         {% endif %}
       {% else %}
-        <p class="empty">You need an approved club before a match day squad can be generated.</p>
+        <p class="empty">You need an approved club and a fixture involving that club before a match day squad can be generated.</p>
       {% endif %}
     </section>
 
@@ -1929,3 +2069,5 @@
   </div>
 </section>
 {% endblock %}
+
+
