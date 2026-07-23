@@ -1540,18 +1540,14 @@
             </div>
             <div class="matchday-preview__teams">
               <div class="matchday-preview__team">
-                <span class="fixture-logo-frame" data-home-logo-frame></span>
                 <div>
-                  <strong data-home-team-name></strong>
-                  <small>Home</small>
+                  <strong><span class="matchday-preview__label">Home Team</span> <span data-home-team-name></span></strong>
                 </div>
               </div>
               <div class="matchday-preview__vs">VS</div>
               <div class="matchday-preview__team">
-                <span class="fixture-logo-frame" data-away-logo-frame></span>
                 <div>
-                  <strong data-away-team-name></strong>
-                  <small>Away</small>
+                  <strong><span class="matchday-preview__label">Away Team</span> <span data-away-team-name></span></strong>
                 </div>
               </div>
             </div>
@@ -1629,15 +1625,6 @@
               }
             };
 
-            const setLogoFrame = (frame, logo, name) => {
-              if (!frame) return;
-              if (logo) {
-                frame.innerHTML = `<img class="fixture-logo" src="${logo}" alt="${name}">`;
-              } else {
-                frame.innerHTML = `<span class="fixture-logo fallback fixture-logo-frame">${(name || "?").slice(0, 1)}</span>`;
-              }
-            };
-
             const renderPreview = () => {
               if (!preview || !activeFixture) {
                 preview.hidden = true;
@@ -1650,8 +1637,6 @@
               preview.querySelector("[data-fixture-category]").textContent = activeFixture.category_name;
               preview.querySelector("[data-home-team-name]").textContent = activeFixture.home_team.team_name;
               preview.querySelector("[data-away-team-name]").textContent = activeFixture.away_team.team_name;
-              setLogoFrame(preview.querySelector("[data-home-logo-frame]"), activeFixture.home_team.logo, activeFixture.home_team.team_name);
-              setLogoFrame(preview.querySelector("[data-away-logo-frame]"), activeFixture.away_team.logo, activeFixture.away_team.team_name);
             };
 
             const populateTeamSelect = () => {

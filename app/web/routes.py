@@ -2102,6 +2102,7 @@ def export_team_admin_match_day_squad(
             "title": "Match Day Squad",
             "subtitle": "Your verified squad will download automatically and expire after 24 hours.",
             "export_kind": "match_day_squad",
+            "season_name": settings.default_season_name,
             "match_day_squad": squad,
         },
     )
