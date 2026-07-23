@@ -47,6 +47,7 @@ from app.services.league import (
     purge_expired_result_files,
     create_match_day_squad,
     delete_match_day_squad,
+    delete_match_day_squads,
     submit_match_result,
     update_fixture,
     verify_match_result,
@@ -2118,6 +2119,20 @@ def delete_team_admin_match_day_squad(
     approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
     try:
         delete_match_day_squad(db, squad_id, team_ids=approved_team_ids)
+    except RegistrationError as exc:
+        return _render(request, "team_admin/action_result.html", {"error": str(exc)})
+    return _redirect("/team-admin/dashboard?dashboard_section=match-day-squads")
+
+
+@router.post("/team-admin/dashboard/match-day-squads/delete-all")
+def delete_all_team_admin_match_day_squads(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    try:
+        delete_match_day_squads(db, team_ids=approved_team_ids)
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
     return _redirect("/team-admin/dashboard?dashboard_section=match-day-squads")

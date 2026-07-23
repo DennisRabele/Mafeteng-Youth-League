@@ -244,6 +244,26 @@ def delete_match_day_squad(
     db.commit()
 
 
+def delete_match_day_squads(
+    db: Session,
+    *,
+    team_ids: Iterable[int] | None = None,
+) -> int:
+    if not _has_table(db, "match_day_squads"):
+        raise RegistrationError("Match day squads are not available yet.")
+    query = select(MatchDaySquad)
+    if team_ids is not None:
+        query = query.where(MatchDaySquad.team_id.in_(list(team_ids)))
+    squads = db.scalars(query).all()
+    deleted = 0
+    for squad in squads:
+        db.delete(squad)
+        deleted += 1
+    if deleted:
+        db.commit()
+    return deleted
+
+
 def _category_age_group(category_name: str | None) -> str | None:
     if not category_name:
         return None

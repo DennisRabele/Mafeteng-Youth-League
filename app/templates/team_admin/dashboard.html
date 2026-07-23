@@ -1743,6 +1743,11 @@
         {% if match_day_squads %}
           <div class="panel-heading" style="margin-top: 2rem;">
             <h3>Recent Match Day Squads</h3>
+            <div class="panel-heading-actions">
+              <form method="post" action="/team-admin/dashboard/match-day-squads/delete-all" onsubmit="return confirm('Delete all match day squads?');">
+                <button class="button button-danger small" type="submit">Delete All</button>
+              </form>
+            </div>
           </div>
           <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
             <table>
