@@ -1723,6 +1723,7 @@ body[data-app-mode="team_admin"] .transfer-list article small {
 }
 
 .matchday-squad-sheet {
+  background: #fff;
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
@@ -1754,6 +1755,7 @@ body[data-app-mode="team_admin"] .transfer-list article small {
   background: #fdfdfd;
   border-top: 1px solid var(--line);
   color: #111;
+  min-height: 64px;
   padding: 12px 14px;
 }
 
@@ -1767,6 +1769,7 @@ body[data-app-mode="team_admin"] .transfer-list article small {
 
 .matchday-squad-cell--name {
   font-weight: 800;
+  line-height: 1.25;
 }
 
 .matchday-squad-cell--jersey input {
@@ -1805,6 +1808,7 @@ body[data-app-mode="team_admin"] .transfer-list article small {
 
   .matchday-squad-row {
     grid-template-columns: 1fr;
+    padding: 14px;
   }
 
   .matchday-squad-cell--action {

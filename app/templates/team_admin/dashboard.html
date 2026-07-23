@@ -1516,7 +1516,7 @@
               <select name="fixture_id" id="match-day-fixture-select" required>
                 <option value="">Select fixture</option>
                 {% for fixture in match_day_fixtures_data %}
-                  <option value="{{ fixture.fixture_id }}">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }} - {{ fixture.dashboard_date_day }} {{ fixture.dashboard_date_month }} {{ fixture.dashboard_date_year }}</option>
+                  <option value="{{ fixture.fixture_id }}">{{ fixture.home_team.team_name }} vs {{ fixture.away_team.team_name }}</option>
                 {% endfor %}
               </select>
             </label>
@@ -1526,32 +1526,6 @@
               </select>
             </label>
           </div>
-
-          <article class="matchday-preview" data-matchday-preview hidden>
-            <div class="matchday-preview__head">
-              <div class="matchday-preview__date">
-                <strong data-fixture-date></strong>
-                <span data-fixture-time></span>
-              </div>
-              <div class="matchday-preview__meta">
-                <span data-fixture-venue></span>
-                <span data-fixture-category></span>
-              </div>
-            </div>
-            <div class="matchday-preview__teams">
-              <div class="matchday-preview__team">
-                <div>
-                  <strong><span class="matchday-preview__label">Home Team</span> <span data-home-team-name></span></strong>
-                </div>
-              </div>
-              <div class="matchday-preview__vs">VS</div>
-              <div class="matchday-preview__team">
-                <div>
-                  <strong><span class="matchday-preview__label">Away Team</span> <span data-away-team-name></span></strong>
-                </div>
-              </div>
-            </div>
-          </article>
 
           <div class="squad-builder">
             <div class="squad-builder__head">
@@ -1606,7 +1580,6 @@
             const jerseyInput = document.getElementById("match-day-jersey-input");
             const addButton = document.querySelector("[data-add-player]");
             const squadList = document.querySelector("[data-squad-list]");
-            const preview = document.querySelector("[data-matchday-preview]");
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
             const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
             const approvedTeamIds = new Set(JSON.parse(document.getElementById("match-day-approved-team-ids")?.textContent || "[]").map((value) => String(value)));
@@ -1623,20 +1596,6 @@
               if (!squadList.querySelector("[data-squad-row]")) {
                 squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
               }
-            };
-
-            const renderPreview = () => {
-              if (!preview || !activeFixture) {
-                preview.hidden = true;
-                return;
-              }
-              preview.hidden = false;
-              preview.querySelector("[data-fixture-date]").textContent = `${activeFixture.dashboard_date_day} ${activeFixture.dashboard_date_month} ${activeFixture.dashboard_date_year}`;
-              preview.querySelector("[data-fixture-time]").textContent = `${activeFixture.dashboard_time} | ${activeFixture.dashboard_day_name}`;
-              preview.querySelector("[data-fixture-venue]").textContent = `Venue: ${activeFixture.venue}`;
-              preview.querySelector("[data-fixture-category]").textContent = activeFixture.category_name;
-              preview.querySelector("[data-home-team-name]").textContent = activeFixture.home_team.team_name;
-              preview.querySelector("[data-away-team-name]").textContent = activeFixture.away_team.team_name;
             };
 
             const populateTeamSelect = () => {
@@ -1737,7 +1696,6 @@
             fixtureSelect.addEventListener("change", () => {
               activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
               clearSquadList();
-              renderPreview();
               populateTeamSelect();
             });
 
