@@ -16,6 +16,8 @@ from app.models import (
     Match,
     MatchEvent,
     MatchResultSubmission,
+    MatchDaySquad,
+    MatchDaySquadMember,
     Notification,
     Season,
     Player,
@@ -203,6 +205,147 @@ def purge_expired_result_files(db: Session) -> int:
     if deleted:
         db.commit()
     return deleted
+
+
+def purge_expired_match_day_squads(db: Session) -> int:
+    if not _has_table(db, "match_day_squads"):
+        return 0
+    cutoff = datetime.utcnow()
+    squads = db.scalars(
+        select(MatchDaySquad).where(
+            MatchDaySquad.expires_at.is_not(None),
+            MatchDaySquad.expires_at <= cutoff,
+        )
+    ).all()
+    deleted = 0
+    for squad in squads:
+        db.delete(squad)
+        deleted += 1
+    if deleted:
+        db.commit()
+    return deleted
+
+
+def _category_age_group(category_name: str | None) -> str | None:
+    if not category_name:
+        return None
+    match = re.search(r"\bU\d{2}\b", category_name, re.IGNORECASE)
+    return match.group(0).upper() if match else None
+
+
+def create_match_day_squad(
+    db: Session,
+    *,
+    team_id: int,
+    generated_by_team_admin_id: int,
+    player_ids: list[int],
+    jersey_numbers: list[int],
+) -> MatchDaySquad:
+    if not _has_table(db, "match_day_squads"):
+        raise RegistrationError("Match day squads are not available yet.")
+    team = db.scalar(
+        select(Team)
+        .options(selectinload(Team.category), selectinload(Team.players))
+        .where(
+            Team.team_id == team_id,
+            Team.status == ApprovalStatus.APPROVED.value,
+        )
+    )
+    if not team or not team.category:
+        raise RegistrationError("Selected team does not exist or is not approved.")
+
+    category_age_group = _category_age_group(team.category.category_name)
+    if not category_age_group:
+        raise RegistrationError("Selected team category is not eligible for match day squads.")
+
+    if not player_ids:
+        raise RegistrationError("Select at least one player for the squad.")
+    if len(player_ids) != len(jersey_numbers):
+        raise RegistrationError("Each selected player must have a jersey number.")
+    if len(set(player_ids)) != len(player_ids):
+        raise RegistrationError("Each player can only appear once in the squad.")
+    if len(set(jersey_numbers)) != len(jersey_numbers):
+        raise RegistrationError("Each jersey number must be unique.")
+
+    players = db.scalars(
+        select(Player)
+        .options(selectinload(Player.team).selectinload(Team.category))
+        .where(Player.player_id.in_(player_ids))
+    ).all()
+    player_map = {player.player_id: player for player in players}
+    if len(player_map) != len(player_ids):
+        raise RegistrationError("One or more selected players could not be found.")
+
+    eligible_players: list[Player] = []
+    for player_id in player_ids:
+        player = player_map[player_id]
+        if player.status != ApprovalStatus.APPROVED.value:
+            raise RegistrationError(f"{player.full_name} is not approved for selection.")
+        if not player.team or player.team.team_id != team.team_id:
+            raise RegistrationError(f"{player.full_name} does not belong to the selected team.")
+        if (player.age_group or "").strip().upper() != category_age_group:
+            raise RegistrationError(
+                f"{player.full_name} is registered in {player.age_group or 'another category'} and cannot be selected for {team.category.category_name}."
+            )
+        eligible_players.append(player)
+
+    squad = MatchDaySquad(
+        team_id=team.team_id,
+        category_id=team.category_id,
+        generated_by_team_admin_id=generated_by_team_admin_id,
+        generated_at=datetime.utcnow(),
+        verified_at=datetime.utcnow(),
+        team_name_snapshot=team.team_name,
+        team_logo_snapshot=team.logo,
+        category_name_snapshot=team.category.category_name,
+    )
+    db.add(squad)
+    db.flush()
+
+    for player, jersey_number in zip(eligible_players, jersey_numbers, strict=True):
+        db.add(
+            MatchDaySquadMember(
+                squad_id=squad.squad_id,
+                player_id=player.player_id,
+                jersey_number=jersey_number,
+                player_name_snapshot=player.full_name,
+                player_code_snapshot=player.player_code,
+                age_group_snapshot=player.age_group,
+            )
+        )
+
+    db.commit()
+    db.refresh(squad)
+    return squad
+
+
+def get_match_day_squad(db: Session, squad_id: int) -> MatchDaySquad | None:
+    if not _has_table(db, "match_day_squads"):
+        return None
+    return db.scalar(
+        select(MatchDaySquad)
+        .options(
+            selectinload(MatchDaySquad.team).selectinload(Team.category),
+            selectinload(MatchDaySquad.generated_by).selectinload(TeamAdmin.user),
+            selectinload(MatchDaySquad.members).selectinload(MatchDaySquadMember.player).selectinload(Player.team),
+        )
+        .where(MatchDaySquad.squad_id == squad_id)
+    )
+
+
+def get_team_admin_match_day_squads(db: Session, team_ids: Iterable[int]) -> list[MatchDaySquad]:
+    if not _has_table(db, "match_day_squads"):
+        return []
+    return db.scalars(
+        select(MatchDaySquad)
+        .options(
+            selectinload(MatchDaySquad.team).selectinload(Team.category),
+            selectinload(MatchDaySquad.generated_by).selectinload(TeamAdmin.user),
+            selectinload(MatchDaySquad.members),
+        )
+        .where(MatchDaySquad.team_id.in_(list(team_ids)))
+        .order_by(MatchDaySquad.generated_at.desc(), MatchDaySquad.squad_id.desc())
+    ).all()
 
 
 def get_notifications_for_user(db: Session, user_id: int, *, limit: int = 20) -> list[Notification]:

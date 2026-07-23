@@ -8,6 +8,7 @@
     <button class="side-button" type="button" data-section-target="my-teams">MY clubs</button>
     <button class="side-button" type="button" data-section-target="my-players">My Players</button>
     <button class="side-button" type="button" data-section-target="fixtures">Fixtures</button>
+    <button class="side-button" type="button" data-section-target="match-day-squads">Match Day Squad</button>
     <button class="side-button" type="button" data-section-target="results">Results</button>
     <button class="side-button" type="button" data-section-target="league-tables">League tables</button>
     <button class="side-button" type="button" data-section-target="notifications">Notifications{% if unread_notifications %} ({{ unread_notifications }}){% endif %}</button>
@@ -1498,6 +1499,172 @@
         <div class="empty fixture-empty">No fixtures available yet.</div>
         {% endfor %}
       </div>
+    </section>
+
+    <section class="panel dashboard-section" id="match-day-squads" data-dashboard-section="match-day-squads" hidden>
+      <div class="panel-heading">
+        <div>
+          <h2>Match Day Squad</h2>
+          <p class="section-copy"><strong>Pick one approved club category, add only eligible players, and the squad card will download automatically after verification.</strong></p>
+        </div>
+      </div>
+
+      {% if approved_teams %}
+        <form class="match-day-squad-form" method="post" action="/team-admin/match-day-squads" data-match-day-squad-form>
+          <div class="form-grid two">
+            <label>Team Category
+              <select name="squad_team_id" id="match-day-team-select" required>
+                <option value="">Select approved club category</option>
+                {% for team in approved_teams %}
+                  <option value="{{ team.team_id }}" data-category="{{ team.category.category_name }}" data-team-name="{{ team.team_name }}">{{ team.team_name }} - {{ team.category.category_name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>Squad Date
+              <input type="text" value="{{ now.strftime('%Y-%m-%d') if now else '' }}" readonly>
+            </label>
+          </div>
+
+          <div class="squad-builder">
+            <div class="squad-builder__head">
+              <h3>Players</h3>
+              <button class="button button-primary small" type="button" data-add-squad-row>Add Player</button>
+            </div>
+            <p class="section-copy" style="margin-top: 0;">Select a player name to auto-fill player ID and age group, then enter a jersey number.</p>
+            <div class="squad-rows" data-squad-rows></div>
+          </div>
+
+          <div class="form-actions wide">
+            <button class="button button-success" type="submit">Generate Match Day Squad</button>
+          </div>
+        </form>
+
+        <script type="application/json" id="match-day-player-data">{{ match_day_players_data | tojson }}</script>
+        <script>
+          (function () {
+            const form = document.querySelector("[data-match-day-squad-form]");
+            const teamSelect = document.getElementById("match-day-team-select");
+            const rows = document.querySelector("[data-squad-rows]");
+            const addRowButton = document.querySelector("[data-add-squad-row]");
+            const playerDataNode = document.getElementById("match-day-player-data");
+            const playerData = playerDataNode ? JSON.parse(playerDataNode.textContent || "[]") : [];
+
+            const renderRow = () => {
+              const row = document.createElement("div");
+              row.className = "squad-row";
+              row.dataset.squadRow = "true";
+              row.innerHTML = `
+                <label>Player Name
+                  <select name="player_ids" data-squad-player-select required>
+                    <option value="">Select player</option>
+                  </select>
+                </label>
+                <label>Player ID
+                  <input type="text" data-squad-player-code readonly>
+                </label>
+                <label>Age
+                  <input type="text" data-squad-player-age readonly>
+                </label>
+                <label>Jersey Number
+                  <input name="jersey_numbers" type="number" min="1" max="99" required>
+                </label>
+                <button class="button button-muted small squad-row__remove" type="button">Remove</button>
+              `;
+              return row;
+            };
+
+            const fillPlayers = (row) => {
+              const select = row.querySelector("[data-squad-player-select]");
+              if (!select) {
+                return;
+              }
+              const selectedTeamId = teamSelect?.value || "";
+              const previousValue = select.value;
+              select.innerHTML = '<option value="">Select player</option>';
+              if (!selectedTeamId) {
+                syncRow(row);
+                return;
+              }
+              playerData
+                .filter((player) => String(player.team_id) === String(selectedTeamId))
+                .forEach((player) => {
+                  const option = document.createElement("option");
+                  option.value = player.player_id;
+                  option.textContent = `${player.full_name} - ${player.team_name} (${player.age_group})`;
+                  option.dataset.playerCode = player.player_code;
+                  option.dataset.ageGroup = player.age_group;
+                  select.appendChild(option);
+                });
+              if (previousValue) {
+                select.value = previousValue;
+              }
+            };
+
+            const syncRow = (row) => {
+              const select = row.querySelector("[data-squad-player-select]");
+              const code = row.querySelector("[data-squad-player-code]");
+              const age = row.querySelector("[data-squad-player-age]");
+              const selectedOption = select?.selectedOptions?.[0];
+              if (code) {
+                code.value = selectedOption?.dataset.playerCode || "";
+              }
+              if (age) {
+                age.value = selectedOption?.dataset.ageGroup || "";
+              }
+            };
+
+            const addRow = () => {
+              const row = renderRow();
+              rows.appendChild(row);
+              fillPlayers(row);
+              row.querySelector("[data-squad-player-select]")?.addEventListener("change", () => syncRow(row));
+              row.querySelector(".squad-row__remove")?.addEventListener("click", () => {
+                if (rows.querySelectorAll("[data-squad-row]").length > 1) {
+                  row.remove();
+                }
+              });
+            };
+
+            teamSelect?.addEventListener("change", () => {
+              rows.querySelectorAll("[data-squad-row]").forEach((row) => {
+                fillPlayers(row);
+                syncRow(row);
+              });
+            });
+
+            addRowButton?.addEventListener("click", addRow);
+            addRow();
+            form?.addEventListener("submit", () => {
+              rows.querySelectorAll("[data-squad-row]").forEach(syncRow);
+            });
+          })();
+        </script>
+
+        {% if match_day_squads %}
+          <div class="panel-heading" style="margin-top: 2rem;">
+            <h3>Recent Match Day Squads</h3>
+          </div>
+          <div class="table-wrap fit-table" data-paginated-table data-page-size="5">
+            <table>
+              <thead>
+                <tr><th>Team</th><th>Generated</th><th>Verified</th><th>Download</th></tr>
+              </thead>
+              <tbody>
+                {% for squad in match_day_squads %}
+                  <tr>
+                    <td>{{ squad.team_name_snapshot }} - {{ squad.category_name_snapshot }}</td>
+                    <td>{{ squad.generated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ squad.verified_at.strftime('%Y-%m-%d %H:%M') if squad.verified_at else '-' }}</td>
+                    <td><a class="button button-primary small" href="/team-admin/dashboard/match-day-squads/{{ squad.squad_id }}/export">Download Squad Card</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      {% else %}
+        <p class="empty">You need an approved club before a match day squad can be generated.</p>
+      {% endif %}
     </section>
 
     <section class="panel dashboard-section" id="results" data-dashboard-section="results" hidden>

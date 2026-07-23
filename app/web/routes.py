@@ -38,10 +38,14 @@ from app.services.league import (
     create_fixture,
     get_league_tables,
     get_notifications_for_user,
+    get_match_day_squad,
+    get_team_admin_match_day_squads,
     get_player_performances,
     mark_notification_read,
     postpone_fixture,
+    purge_expired_match_day_squads,
     purge_expired_result_files,
+    create_match_day_squad,
     submit_match_result,
     update_fixture,
     verify_match_result,
@@ -1754,6 +1758,7 @@ def team_admin_dashboard(
     team_admin = _require_team_admin(request, db)
     restore_expired_loans(db)
     process_player_registration_lifecycle(db)
+    purge_expired_match_day_squads(db)
     categories = db.scalars(select(Category).order_by(Category.category_name)).all()
     teams = load_team_admin_teams(db, team_admin.team_admin_id)
     approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
@@ -1763,7 +1768,7 @@ def team_admin_dashboard(
     can_register_clubs = bool(owned_approved_teams) or not approved_teams
     players = db.scalars(
         select(Player)
-        .options(selectinload(Player.team))
+        .options(selectinload(Player.team).selectinload(Team.category))
         .join(Team, Player.team_id == Team.team_id)
         .where(Team.team_id.in_(approved_team_ids))
         .where(Player.status != "transferred")
@@ -1774,6 +1779,19 @@ def team_admin_dashboard(
         player for player in players if player.status == ApprovalStatus.APPROVED.value
     ]
     _decorate_player_registration_details(approved_players, db)
+    match_day_players_data = [
+        {
+            "player_id": player.player_id,
+            "full_name": player.full_name,
+            "player_code": player.player_code or f"PLAYER-{player.player_id}",
+            "age_group": player.age_group or "-",
+            "team_id": player.team.team_id if player.team else None,
+            "team_name": player.team.team_name if player.team else "-",
+            "category_name": player.team.category.category_name if player.team and player.team.category else "-",
+        }
+        for player in approved_players
+    ]
+    match_day_squads = get_team_admin_match_day_squads(db, approved_team_ids)
     renewal_requests = db.scalars(
         select(PlayerRegistrationRequest)
         .where(
@@ -1922,6 +1940,7 @@ def team_admin_dashboard(
             "team_admin": team_admin,
             "dashboard_notice": notice,
             "dashboard_notice_kind": notice_kind or "success",
+            "now": datetime.utcnow(),
             "categories": categories,
             "teams": teams,
             "approved_teams": approved_teams,
@@ -1929,6 +1948,8 @@ def team_admin_dashboard(
             "can_register_clubs": can_register_clubs,
             "players": players,
             "approved_players": approved_players,
+            "match_day_players_data": match_day_players_data,
+            "match_day_squads": match_day_squads,
             "renewal_requests": renewal_requests,
             "transfer_target_teams": transfer_target_teams,
             "all_teams": all_teams,
@@ -1990,6 +2011,69 @@ def export_team_admin_fixtures(
                 "date_from": fixture_date_from or "",
                 "date_to": fixture_date_to or "",
             },
+        },
+    )
+
+
+@router.post("/team-admin/match-day-squads")
+def create_team_admin_match_day_squad(
+    request: Request,
+    squad_team_id: int = Form(...),
+    player_ids: list[int] = Form(...),
+    jersey_numbers: list[int] = Form(...),
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    if squad_team_id not in approved_team_ids:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Select one of your approved clubs before generating a squad."},
+        )
+    try:
+        squad = create_match_day_squad(
+            db,
+            team_id=squad_team_id,
+            generated_by_team_admin_id=team_admin.team_admin_id,
+            player_ids=player_ids,
+            jersey_numbers=jersey_numbers,
+        )
+    except RegistrationError as exc:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": str(exc)},
+        )
+    return _redirect(f"/team-admin/dashboard/match-day-squads/{squad.squad_id}/export")
+
+
+@router.get("/team-admin/dashboard/match-day-squads/{squad_id}/export")
+def export_team_admin_match_day_squad(
+    request: Request,
+    squad_id: int,
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    purge_expired_match_day_squads(db)
+    squad = get_match_day_squad(db, squad_id)
+    if not squad or squad.team_id not in approved_team_ids:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match day squad not found.")
+    if not squad.downloaded_at:
+        squad.downloaded_at = datetime.utcnow()
+        squad.expires_at = squad.downloaded_at + timedelta(hours=24)
+        db.commit()
+        db.refresh(squad)
+    filename = f"match_day_squad_{squad.team_name_snapshot}_{squad.generated_at.strftime('%Y%m%d_%H%M')}.png".replace(" ", "_")
+    return _render_downloadable_cards(
+        "exports/cards.html",
+        filename=filename,
+        context={
+            "title": "Match Day Squad",
+            "subtitle": "Your verified squad will download automatically and expire after 24 hours.",
+            "export_kind": "match_day_squad",
+            "match_day_squad": squad,
         },
     )
 
