@@ -2091,7 +2091,6 @@ def export_team_admin_match_day_squad(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match day squad not found.")
     if not squad.downloaded_at:
         squad.downloaded_at = datetime.utcnow()
-        squad.expires_at = squad.downloaded_at + timedelta(hours=24)
         db.commit()
         db.refresh(squad)
     filename = f"match_day_squad_{squad.team_name_snapshot}_{squad.generated_at.strftime('%Y%m%d_%H%M')}.png".replace(" ", "_")
@@ -2100,7 +2099,7 @@ def export_team_admin_match_day_squad(
         filename=filename,
         context={
             "title": "Match Day Squad",
-            "subtitle": "Your verified squad will download automatically and expire after 24 hours.",
+            "subtitle": "Match day squads are automatically deleted 24 hours after generation, whether they are downloaded or not.",
             "export_kind": "match_day_squad",
             "season_name": settings.default_season_name,
             "match_day_squad": squad,

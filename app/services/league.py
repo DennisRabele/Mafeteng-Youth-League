@@ -305,13 +305,16 @@ def create_match_day_squad(
             )
         eligible_players.append(player)
 
+    now = datetime.utcnow()
     squad = MatchDaySquad(
         fixture_id=fixture.fixture_id,
         team_id=team.team_id,
         category_id=team.category_id,
         generated_by_team_admin_id=generated_by_team_admin_id,
-        generated_at=datetime.utcnow(),
+        generated_at=now,
         verified_at=datetime.utcnow(),
+        downloaded_at=None,
+        expires_at=now + timedelta(hours=24),
         fixture_date_snapshot=fixture.fixture_date,
         venue_snapshot=fixture.venue,
         home_team_name_snapshot=fixture.home_team.team_name,

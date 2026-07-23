@@ -1508,6 +1508,9 @@
           <p class="section-copy"><strong>Select a fixture first. The squad sheet will lock to that match and only allow eligible players from the correct team category.</strong></p>
         </div>
       </div>
+      <div class="alert" style="background:#fff2cc; border-color:#d9a300; color:#111; margin-bottom: 1rem;">
+        Match day squads are automatically deleted 24 hours after they are generated, even if they are never downloaded.
+      </div>
 
       {% if approved_teams and match_day_fixtures_data %}
         <form class="match-day-squad-form" method="post" action="/team-admin/match-day-squads" data-match-day-squad-form>
