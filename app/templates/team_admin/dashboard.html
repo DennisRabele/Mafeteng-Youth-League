@@ -1542,7 +1542,7 @@
                 </select>
               </label>
               <label>Jersey Number
-                <input id="match-day-jersey-input" type="number" min="1" max="99" disabled>
+                <input id="match-day-jersey-input" type="number" min="1" max="99" disabled required>
               </label>
               <div class="form-actions wide" style="align-self:end;">
                 <button class="button button-primary" type="button" data-add-player disabled>Add to List</button>
@@ -1601,6 +1601,16 @@
               }
             };
 
+            const updateAddButtonState = () => {
+              const canAdd = Boolean(
+                activeFixture &&
+                teamSelect.value &&
+                playerSelect.value &&
+                jerseyInput.value.trim()
+              );
+              addButton.disabled = !canAdd;
+            };
+
             const populateTeamSelect = () => {
               teamSelect.innerHTML = '<option value="">Select a team</option>';
               teamSelect.disabled = true;
@@ -1648,14 +1658,15 @@
               const enabled = Boolean(selectedFixture && selectedTeamId);
               playerSelect.disabled = !enabled;
               jerseyInput.disabled = !enabled;
-              addButton.disabled = !enabled;
+              updateAddButtonState();
             };
 
             const addPlayerRow = () => {
               const playerId = playerSelect.value;
               const selectedOption = playerSelect.selectedOptions[0];
               const jerseyNumber = jerseyInput.value.trim();
-              if (!playerId || !selectedOption || !jerseyNumber) {
+              const jerseyValue = Number(jerseyNumber);
+              if (!playerId || !selectedOption || !Number.isInteger(jerseyValue) || jerseyValue < 1 || jerseyValue > 99) {
                 return;
               }
               if (selectedPlayerIds.has(playerId)) {
@@ -1676,7 +1687,7 @@
                 <span class="matchday-squad-cell">${playerCode}</span>
                 <span class="matchday-squad-cell">${ageGroup}</span>
                 <label class="matchday-squad-cell matchday-squad-cell--jersey">
-                  <input name="jersey_numbers" type="number" min="1" max="99" value="${jerseyNumber}" required>
+                  <input name="jersey_numbers" type="number" min="1" max="99" value="${jerseyValue}" required>
                 </label>
                 <div class="matchday-squad-cell matchday-squad-cell--action">
                   <button class="button button-muted small" type="button">Remove</button>
@@ -1711,7 +1722,10 @@
             addButton.addEventListener("click", addPlayerRow);
             playerSelect.addEventListener("change", () => {
               jerseyInput.focus();
+              updateAddButtonState();
             });
+            jerseyInput.addEventListener("input", updateAddButtonState);
+            jerseyInput.addEventListener("change", updateAddButtonState);
 
             form.addEventListener("submit", (event) => {
               if (!activeFixture || !teamSelect.value) {
@@ -1741,7 +1755,12 @@
                     <td>{{ squad.home_team_name_snapshot }} vs {{ squad.away_team_name_snapshot }} - {{ squad.venue_snapshot }}</td>
                     <td>{{ squad.team_name_snapshot }} - {{ squad.category_name_snapshot }}</td>
                     <td>{{ squad.generated_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                    <td><a class="button button-primary small" href="/team-admin/dashboard/match-day-squads/{{ squad.squad_id }}/export">Download Squad Card</a></td>
+                    <td style="display:flex; gap:8px; flex-wrap:wrap;">
+                      <a class="button button-primary small" href="/team-admin/dashboard/match-day-squads/{{ squad.squad_id }}/export">Download Squad Card</a>
+                      <form method="post" action="/team-admin/dashboard/match-day-squads/{{ squad.squad_id }}/delete" onsubmit="return confirm('Delete this match day squad?');">
+                        <button class="button button-danger small" type="submit">Delete</button>
+                      </form>
+                    </td>
                   </tr>
                 {% endfor %}
               </tbody>

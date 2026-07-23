@@ -226,6 +226,24 @@ def purge_expired_match_day_squads(db: Session) -> int:
     return deleted
 
 
+def delete_match_day_squad(
+    db: Session,
+    squad_id: int,
+    *,
+    team_ids: Iterable[int] | None = None,
+) -> None:
+    if not _has_table(db, "match_day_squads"):
+        raise RegistrationError("Match day squads are not available yet.")
+    query = select(MatchDaySquad).where(MatchDaySquad.squad_id == squad_id)
+    if team_ids is not None:
+        query = query.where(MatchDaySquad.team_id.in_(list(team_ids)))
+    squad = db.scalar(query)
+    if not squad:
+        raise RegistrationError("Match day squad was not found.")
+    db.delete(squad)
+    db.commit()
+
+
 def _category_age_group(category_name: str | None) -> str | None:
     if not category_name:
         return None

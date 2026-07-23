@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 import os
 from pathlib import Path
 
@@ -7,7 +8,8 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import BASE_DIR, settings
-from app.db.session import Base, _ensure_schema_columns, engine, init_db
+from app.db.session import Base, SessionLocal, _ensure_schema_columns, engine, init_db
+from app.services.league import purge_expired_match_day_squads
 from app.web.routes import router as web_router
 
 
@@ -17,7 +19,20 @@ async def lifespan(app: FastAPI):
     _ensure_schema_columns()
     if _should_init_db():
         init_db()
-    yield
+
+    async def _cleanup_match_day_squads() -> None:
+        while True:
+            await asyncio.sleep(3600)
+            with SessionLocal() as db:
+                purge_expired_match_day_squads(db)
+
+    cleanup_task = asyncio.create_task(_cleanup_match_day_squads())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
 
 
 def create_app(app_mode: str = "combined") -> FastAPI:
