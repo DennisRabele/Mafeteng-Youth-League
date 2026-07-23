@@ -2120,7 +2120,7 @@ def delete_team_admin_match_day_squad(
         delete_match_day_squad(db, squad_id, team_ids=approved_team_ids)
     except RegistrationError as exc:
         return _render(request, "team_admin/action_result.html", {"error": str(exc)})
-    return _redirect("/team-admin/dashboard#match-day-squads")
+    return _redirect("/team-admin/dashboard?dashboard_section=match-day-squads")
 
 
 @router.get("/team-admin/dashboard/league-tables/export")
