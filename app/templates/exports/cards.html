@@ -1095,12 +1095,12 @@
           <div class="export-empty">No league tables available yet.</div>
         {% endfor %}
       </section>
-    {% elif export_kind == 'performances' %}
+    {% elif export_kind == 'player_statistics' %}
       <section class="export-stack">
         <div class="export-section">
           <h2>Player Overview</h2>
           <div class="export-grid">
-            {% for row in player_performances.players %}
+            {% for row in player_statistics.players %}
               <article class="export-card">
                 <div class="export-card__head">
                   <div>
@@ -1124,7 +1124,7 @@
         <div class="export-section">
           <h2>Top Scorers</h2>
           <div class="export-grid">
-            {% for row in player_performances.scorers %}
+            {% for row in player_statistics.scorers %}
               <article class="export-card">
                 <div class="export-card__head">
                   <div>
@@ -1147,7 +1147,7 @@
         <div class="export-section">
           <h2>Top Assisters</h2>
           <div class="export-grid">
-            {% for row in player_performances.assisters %}
+            {% for row in player_statistics.assisters %}
               <article class="export-card">
                 <div class="export-card__head">
                   <div>
