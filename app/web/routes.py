@@ -1958,7 +1958,7 @@ def team_admin_dashboard(
         )
     league_tables = _safe_dashboard_value(lambda: get_league_tables(db), {})
     player_statistics = _safe_dashboard_value(
-        lambda: get_player_statistics(db, team_ids=approved_team_ids),
+        lambda: get_player_statistics(db),
         {"players": [], "scorers": [], "assisters": []},
     )
     notifications = _safe_dashboard_value(
@@ -2008,6 +2008,7 @@ def team_admin_dashboard(
             "result_submissions": result_submissions,
             "league_tables": league_tables,
             "player_statistics": player_statistics,
+            "player_statistics_teams": all_teams,
             "notifications": notifications,
             "unread_notifications": unread_notifications,
         },
@@ -2198,15 +2199,22 @@ def export_team_admin_player_statistics(
     request: Request,
     metric: str = "all",
     category: str = "all",
+    team_id: str = "all",
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
     statistics = _safe_dashboard_value(
-        lambda: get_player_statistics(db, team_ids=team_ids),
+        lambda: get_player_statistics(db),
         {"players": [], "scorers": [], "assisters": []},
     )
-    for key in ("scorers", "assisters"):
+    if team_id != "all":
+        team_filter_id = int(team_id)
+        for key in ("players", "scorers", "assisters"):
+            statistics[key] = [
+                row for row in statistics.get(key, [])
+                if row.get("team") and row["team"].team_id == team_filter_id
+            ]
+    for key in ("players", "scorers", "assisters"):
         statistics[key] = [
             row for row in statistics.get(key, [])
             if category == "all" or row["category_name"] == category
@@ -2215,7 +2223,7 @@ def export_team_admin_player_statistics(
         statistics["assisters"] = []
     elif metric == "assists":
         statistics["scorers"] = []
-    filename = f"team_admin_player_statistics_{metric}_{category}.png".replace(" ", "_")
+    filename = f"team_admin_player_statistics_{metric}_{team_id}_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
@@ -2315,6 +2323,7 @@ def export_super_admin_player_statistics(
     request: Request,
     metric: str = "all",
     category: str = "all",
+    team_id: str = "all",
     db: Session = Depends(get_db),
 ):
     _require_super_admin(request, db)
@@ -2322,7 +2331,14 @@ def export_super_admin_player_statistics(
         lambda: get_player_statistics(db),
         {"players": [], "scorers": [], "assisters": []},
     )
-    for key in ("scorers", "assisters"):
+    if team_id != "all":
+        team_filter_id = int(team_id)
+        for key in ("players", "scorers", "assisters"):
+            player_statistics[key] = [
+                row for row in player_statistics.get(key, [])
+                if row.get("team") and row["team"].team_id == team_filter_id
+            ]
+    for key in ("players", "scorers", "assisters"):
         player_statistics[key] = [
             row for row in player_statistics.get(key, [])
             if category == "all" or row["category_name"] == category
@@ -2331,7 +2347,7 @@ def export_super_admin_player_statistics(
         player_statistics["assisters"] = []
     elif metric == "assists":
         player_statistics["scorers"] = []
-    filename = f"super_admin_player_statistics_{metric}_{category}.png".replace(" ", "_")
+    filename = f"super_admin_player_statistics_{metric}_{team_id}_{category}.png".replace(" ", "_")
     return _render_downloadable_cards(
         "exports/cards.html",
         filename=filename,
