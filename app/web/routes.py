@@ -1524,6 +1524,7 @@ def super_admin_dashboard(
         lambda: get_player_statistics(db),
         {"players": [], "scorers": [], "assisters": []},
     )
+    player_statistics_all = player_statistics
     notifications = _safe_dashboard_value(
         lambda: get_notifications_for_user(db, user.user_id, limit=12),
         [],
@@ -1574,7 +1575,8 @@ def super_admin_dashboard(
             },
             "result_submissions": verified_result_submissions,
             "league_tables": league_tables,
-        "player_statistics": player_statistics,
+            "player_statistics": player_statistics,
+            "player_statistics_all": player_statistics_all,
             "notifications": notifications,
             "unread_notifications": unread_notifications,
         },
@@ -1961,6 +1963,10 @@ def team_admin_dashboard(
         lambda: get_player_statistics(db),
         {"players": [], "scorers": [], "assisters": []},
     )
+    player_statistics_all = _safe_dashboard_value(
+        lambda: get_player_statistics(db, team_ids=approved_team_ids),
+        {"players": [], "scorers": [], "assisters": []},
+    )
     notifications = _safe_dashboard_value(
         lambda: get_notifications_for_user(db, team_admin.user_id, limit=12),
         [],
@@ -2008,7 +2014,8 @@ def team_admin_dashboard(
             "result_submissions": result_submissions,
             "league_tables": league_tables,
             "player_statistics": player_statistics,
-            "player_statistics_teams": all_teams,
+            "player_statistics_all": player_statistics_all,
+            "player_statistics_teams": approved_teams,
             "notifications": notifications,
             "unread_notifications": unread_notifications,
         },
