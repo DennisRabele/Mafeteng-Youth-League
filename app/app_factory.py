@@ -15,9 +15,9 @@ from app.web.routes import router as web_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    _ensure_schema_columns()
     if _should_init_db():
+        Base.metadata.create_all(bind=engine)
+        _ensure_schema_columns()
         init_db()
 
     async def _cleanup_match_day_squads() -> None:
