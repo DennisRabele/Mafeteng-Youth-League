@@ -8,7 +8,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import BASE_DIR, settings
-from app.db.session import Base, SessionLocal, _ensure_schema_columns, engine, init_db
+from app.db.session import Base, SessionLocal, _ensure_schema_columns, get_engine, init_db
 from app.services.league import purge_expired_match_day_squads
 from app.web.routes import router as web_router
 
@@ -16,7 +16,7 @@ from app.web.routes import router as web_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if _should_init_db():
-        Base.metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=get_engine())
         _ensure_schema_columns()
         init_db()
 
