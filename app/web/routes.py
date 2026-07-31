@@ -574,6 +574,7 @@ def _combine_result_lines(*chunks: str | None) -> str | None:
 
 
 @router.get("/")
+@router.get("/api/index")
 def home(request: Request):
     user = _current_user(request)
     app_mode = getattr(request.app.state, "app_mode", "combined")
