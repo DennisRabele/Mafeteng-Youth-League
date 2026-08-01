@@ -44,14 +44,14 @@
         </nav>
       {% elif app_mode == 'super_admin' and not hide_public_auth_nav %}
         <nav class="topnav">
-          <a data-loading-trigger class="active" href="/">Home</a>
-          <a data-loading-trigger href="/login">Login</a>
-          <a data-loading-trigger class="button button-primary" href="/register/super-admin">Register</a>
+          <a class="active" href="/">Home</a>
+          <a href="/login">Login</a>
+          <a class="button button-primary" href="/register/super-admin">Register</a>
         </nav>
       {% elif app_mode != 'super_admin' and not is_team_admin_home and not hide_public_auth_nav %}
         <nav class="topnav">
-          <a data-loading-trigger href="/login">Login</a>
-          <a data-loading-trigger class="button button-primary" href="/register/team-admin">Register</a>
+          <a href="/login">Login</a>
+          <a class="button button-primary" href="/register/team-admin">Register</a>
         </nav>
       {% endif %}
     </header>
