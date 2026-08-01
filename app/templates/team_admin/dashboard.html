@@ -1626,8 +1626,9 @@
               if (!activeFixture) {
                 return;
               }
-              const teams = [activeFixture.home_team, activeFixture.away_team]
-                .filter((team) => team && approvedTeamIds.has(String(team.team_id)));
+              const fixtureTeams = [activeFixture.home_team, activeFixture.away_team].filter(Boolean);
+              const approvedFixtureTeams = fixtureTeams.filter((team) => approvedTeamIds.has(String(team.team_id)));
+              const teams = approvedFixtureTeams.length > 0 ? approvedFixtureTeams : fixtureTeams;
               teams.forEach((team) => {
                 const option = document.createElement("option");
                 option.value = team.team_id;
