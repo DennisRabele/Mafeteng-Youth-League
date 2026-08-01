@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import BASE_DIR, settings
-from app.db.session import Base, SessionLocal, _ensure_schema_columns, get_engine, init_db
+from app.db.session import SessionLocal, init_db
 from app.services.league import purge_expired_match_day_squads
 from app.web.routes import router as web_router
 
@@ -16,8 +16,6 @@ from app.web.routes import router as web_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if _should_init_db():
-        Base.metadata.create_all(bind=get_engine())
-        _ensure_schema_columns()
         init_db()
 
     async def _cleanup_match_day_squads() -> None:
@@ -105,10 +103,12 @@ def _using_local_upload_storage() -> bool:
 
 
 def _should_init_db() -> bool:
+    if _is_vercel_deployment():
+        return True
     raw_value = os.getenv("RUN_DB_INIT")
     if raw_value is not None:
         return raw_value.strip().lower() in {"1", "true", "yes", "on"}
-    return not _is_vercel_deployment()
+    return True
 
 
 def _is_vercel_deployment() -> bool:
