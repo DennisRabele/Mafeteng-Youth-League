@@ -12,6 +12,7 @@ from app.models import (
     Fixture,
     Match,
     Player,
+    PlayerStatistic,
     PlayerRegistrationRequest,
     Season,
     SuperAdmin,
@@ -28,7 +29,6 @@ from app.services.registration import (
     create_team_admin_registration,
     determine_age_group,
     issue_email_verification_code,
-    issue_login_code,
     register_player,
     register_team,
     renew_player_registration,
@@ -42,16 +42,15 @@ from app.services.registration import (
     respond_to_transfer,
     suggested_registration_period,
     verify_email_code,
-    verify_login_code,
+    player_can_play_for_category,
 )
 from app.services.team_access import (
     load_team_admin_approved_team_ids,
     load_team_admin_approved_teams,
     load_team_admin_owned_approved_teams,
 )
-from app.services.league import get_player_performances
+from app.services.league import get_league_tables, get_player_performances
 from app.services.league import submit_match_result
-from app.services.league import verify_match_result
 from app.web.routes import _load_result_fixture_players
 import app.web.routes as routes
 
@@ -97,6 +96,15 @@ def test_age_group_boundaries():
     assert suggested_registration_period(date(2012, 6, 10), reference) == 2
     assert suggested_registration_period(date(2015, 6, 10), reference) == 3
     assert suggested_registration_period(date(2009, 6, 10), reference) == 1
+
+
+def test_players_can_play_up_but_not_down_across_categories():
+    assert player_can_play_for_category(SimpleNamespace(age_group="U13", gender="Male"), "Male U15")
+    assert player_can_play_for_category(SimpleNamespace(age_group="U13", gender="Female"), "Female U17")
+    assert player_can_play_for_category(SimpleNamespace(age_group="U15", gender="Female"), "Female U20")
+    assert not player_can_play_for_category(SimpleNamespace(age_group="U15", gender="Male"), "Male U13")
+    assert not player_can_play_for_category(SimpleNamespace(age_group="U17", gender="Female"), "Female U15")
+    assert not player_can_play_for_category(SimpleNamespace(age_group="U17", gender="Male"), "Female U20")
 
 
 def test_registration_approval_flow_creates_team_season_and_qr_card():
@@ -430,7 +438,7 @@ def test_approved_result_updates_player_performances():
     performances_before = get_player_performances(db)
     assert all(not rows for rows in performances_before.values())
 
-    verified = verify_match_result(
+    verified = routes.verify_match_result(
         db,
         submission_id=submission.submission_id,
         super_admin_id=super_admin.admin_id,
@@ -464,7 +472,7 @@ def test_approved_result_updates_player_performances():
     )
     assert edited_submission.status == ApprovalStatus.PENDING.value
 
-    reverified = verify_match_result(
+    reverified = routes.verify_match_result(
         db,
         submission_id=edited_submission.submission_id,
         super_admin_id=super_admin.admin_id,
@@ -483,6 +491,207 @@ def test_approved_result_updates_player_performances():
     )
     assert edited_scorer_row["goals"] == 1
     assert edited_scorer_row["goal_types"] == {"Penalty": 1}
+
+
+def test_player_statistics_are_split_by_category_for_the_same_player_identity():
+    db = make_session()
+    season = Season(
+        season_name="2026 Split Stats Season",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+    )
+    db.add(season)
+    db.flush()
+    u13_category = Category(season_id=season.season_id, category_name="Male U13")
+    u15_category = Category(season_id=season.season_id, category_name="Male U15")
+    db.add_all([u13_category, u15_category])
+    db.commit()
+
+    admin = create_team_admin_registration(
+        db,
+        full_name="Stats Admin",
+        team_name="Stats Club",
+        email="stats@example.test",
+        password="Password123",
+        national_id="NID-STATS",
+        phone="+26650000040",
+        photo_path="/uploads/admin-photos/stats-admin.png",
+    )
+    admin = approve_team_admin(db, admin.team_admin_id)
+    team_u13 = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=admin.team_admin_id,
+            team_name="Stats Club U13",
+            category_id=u13_category.category_id,
+            contact_information="+26650000041",
+            team_address="Stats Road 13",
+            training_ground="Stats Ground 13",
+            home_ground="Stats Home 13",
+            logo="/uploads/team-logos/stats-club-u13.png",
+        ).team_id,
+    )
+    team_u15 = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=admin.team_admin_id,
+            team_name="Stats Club U15",
+            category_id=u15_category.category_id,
+            contact_information="+26650000042",
+            team_address="Stats Road 15",
+            training_ground="Stats Ground 15",
+            home_ground="Stats Home 15",
+            logo="/uploads/team-logos/stats-club-u15.png",
+        ).team_id,
+    )
+
+    shared_identity = {
+        "full_name": "Shared Player",
+        "gender": "Male",
+        "dob": date(2012, 5, 4),
+        "nationality": "Mosotho",
+        "email": None,
+        "residential_address": None,
+        "school_name": None,
+        "position": "Forward",
+        "photo_path": None,
+        "parent_id": None,
+        "registration_type": "new",
+        "registration_period": 1,
+        "agreement_form_path": None,
+        "rejection_reason": None,
+        "status": ApprovalStatus.APPROVED.value,
+        "approved_by_super_admin_id": None,
+        "approved_at": datetime.utcnow(),
+        "registration_reminder_sent_at": None,
+        "is_on_loan": False,
+        "original_team_id": None,
+        "loan_end_date": None,
+    }
+    player_u13 = Player(team_id=team_u13.team_id, age_group="U13", **shared_identity)
+    player_u15 = Player(team_id=team_u15.team_id, age_group="U15", **shared_identity)
+    db.add_all([player_u13, player_u15])
+    db.flush()
+
+    db.add_all(
+        [
+            PlayerStatistic(
+                fixture_id=1,
+                match_id=1,
+                submission_id=1,
+                player_id=player_u13.player_id,
+                team_id=team_u13.team_id,
+                category_id=u13_category.category_id,
+                team_code=team_u13.team_code,
+                club_name=team_u13.team_name,
+                category_name=u13_category.category_name,
+                stat_type="goal",
+                goal_type="Open Play",
+            ),
+            PlayerStatistic(
+                fixture_id=2,
+                match_id=2,
+                submission_id=2,
+                player_id=player_u15.player_id,
+                team_id=team_u15.team_id,
+                category_id=u15_category.category_id,
+                team_code=team_u15.team_code,
+                club_name=team_u15.team_name,
+                category_name=u15_category.category_name,
+                stat_type="goal",
+                goal_type="Penalty",
+            ),
+        ]
+    )
+    db.commit()
+
+    performances = get_player_performances(db)
+    shared_rows = [row for row in performances["players"] if row["player"].full_name == "Shared Player"]
+
+    assert len(shared_rows) == 2
+    assert sorted((row["category_name"], row["goals"]) for row in shared_rows) == [
+        ("Male U13", 1),
+        ("Male U15", 1),
+    ]
+
+
+def test_league_tables_use_head_to_head_before_goal_difference():
+    db = make_session()
+    season = Season(
+        season_name="2026 H2H Season",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+    )
+    db.add(season)
+    db.flush()
+    category = Category(season_id=season.season_id, category_name="Male U17")
+    db.add(category)
+    db.commit()
+
+    admin = create_team_admin_registration(
+        db,
+        full_name="League Admin",
+        team_name="League Club",
+        email="league@example.test",
+        password="Password123",
+        national_id="NID-LEAGUE",
+        phone="+26650000050",
+        photo_path="/uploads/admin-photos/league-admin.png",
+    )
+    admin = approve_team_admin(db, admin.team_admin_id)
+
+    teams = []
+    for index, name in enumerate(("Alpha", "Bravo", "Charlie", "Delta"), start=1):
+        team = register_team(
+            db,
+            team_admin_id=admin.team_admin_id,
+            team_name=name,
+            category_id=category.category_id,
+            contact_information=f"+2665000005{index}",
+            team_address=f"{name} Road",
+            training_ground=f"{name} Training",
+            home_ground=f"{name} Ground",
+            logo=f"/uploads/team-logos/{name.lower()}.png",
+        )
+        teams.append(approve_team(db, team.team_id))
+
+    fixtures_and_scores = [
+        (teams[0], teams[1], 1, 0),
+        (teams[1], teams[2], 1, 0),
+        (teams[2], teams[0], 2, 0),
+        (teams[0], teams[3], 1, 0),
+        (teams[1], teams[3], 10, 0),
+        (teams[2], teams[3], 5, 0),
+    ]
+    for index, (home_team, away_team, home_score, away_score) in enumerate(fixtures_and_scores, start=1):
+        fixture = Fixture(
+            season_id=season.season_id,
+            category_id=category.category_id,
+            home_team_id=home_team.team_id,
+            away_team_id=away_team.team_id,
+            fixture_date=datetime(2026, 6, index, 15, 0),
+            venue=f"Venue {index}",
+            status="completed",
+        )
+        db.add(fixture)
+        db.flush()
+        db.add(
+            Match(
+                fixture_id=fixture.fixture_id,
+                match_date=fixture.fixture_date,
+                status="completed",
+                home_score=home_score,
+                away_score=away_score,
+            )
+        )
+    db.commit()
+
+    tables = get_league_tables(db)
+    ranked_names = [row["team"].team_name for row in tables[category.category_name]]
+
+    assert ranked_names == ["Charlie", "Bravo", "Alpha", "Delta"]
 
 
 def test_approved_team_codes_are_backfilled_for_legacy_records():
@@ -1450,7 +1659,7 @@ def test_rejection_reasons_are_required_and_saved():
     assert player.rejection_reason == "Parent consent picture missing."
 
 
-def test_email_verification_and_login_codes_are_required_and_consumed():
+def test_email_verification_codes_are_required_and_consumed():
     db = make_session()
     super_admin = create_super_admin_registration(
         db,
@@ -1465,10 +1674,6 @@ def test_email_verification_and_login_codes_are_required_and_consumed():
     verify_email_code(db, super_admin.user, verification_code)
     assert super_admin.user.email_verified is True
     assert super_admin.user.email_verification_code_hash is None
-
-    login_code = issue_login_code(db, super_admin.user)
-    verify_login_code(db, super_admin.user, login_code)
-    assert super_admin.user.login_code_hash is None
 
 
 def test_renewal_and_transfer_registration_flow_records_database_changes():
