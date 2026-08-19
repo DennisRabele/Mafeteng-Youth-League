@@ -1519,9 +1519,9 @@ def test_result_players_endpoint_returns_only_fixture_team_players_for_the_categ
     assert [player["player_name"] for player in payload["home_players"]] == [
         "Home Striker",
         "Home Support",
-        "Home U15 Outsider",
         "Home Younger Player",
     ]
+    assert all(player["player_name"] != "Home U15 Outsider" for player in payload["home_players"])
     assert [player["player_name"] for player in payload["away_players"]] == [
         "Away Striker",
         "Away Support",
@@ -1543,7 +1543,7 @@ def test_result_players_endpoint_returns_only_fixture_team_players_for_the_categ
     assert submission.assist_names_text == "Home Support"
 
 
-def test_match_result_submission_accepts_play_up_players_from_the_same_club():
+def test_match_result_submission_rejects_players_from_other_team_under_the_same_admin():
     db = make_session()
     season = Season(
         season_name="2026 Play Up Season",
@@ -1710,20 +1710,23 @@ def test_match_result_submission_accepts_play_up_players_from_the_same_club():
     db.commit()
 
     payload = _load_result_fixture_players(db, fixture.fixture_id)
-    assert any(player["player_id"] == play_up_player.player_id for player in payload["home_players"])
+    assert all(player["player_id"] != play_up_player.player_id for player in payload["home_players"])
 
-    submission = submit_match_result(
-        db,
-        team_admin_id=home_admin.team_admin_id,
-        fixture_id=fixture.fixture_id,
-        home_score=1,
-        away_score=0,
-        scorer_player_ids=[play_up_player.player_id],
-        goal_types=["Penalty"],
-        assist_player_ids=[None],
-    )
-    assert submission.status == ApprovalStatus.PENDING.value
-    assert submission.scorer_names_text == "Home Play Up Player"
+    try:
+        submit_match_result(
+            db,
+            team_admin_id=home_admin.team_admin_id,
+            fixture_id=fixture.fixture_id,
+            home_score=1,
+            away_score=0,
+            scorer_player_ids=[play_up_player.player_id],
+            goal_types=["Penalty"],
+            assist_player_ids=[None],
+        )
+    except RegistrationError as exc:
+        assert "own club" in str(exc)
+    else:
+        raise AssertionError("Expected the other team\'s player to be rejected.")
 
 
 def test_rejection_reasons_are_required_and_saved():
