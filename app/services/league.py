@@ -814,8 +814,6 @@ def _player_lookup_map(
 
     if numeric_ids:
         query = select(Player).options(selectinload(Player.team).selectinload(Team.category)).where(Player.player_id.in_(numeric_ids))
-        if team_admin_id is not None:
-            query = query.join(Team, Player.team_id == Team.team_id).where(Team.team_admin_id == team_admin_id)
         players = db.scalars(query).all()
         for player in players:
             players_by_key[player.player_id] = player
@@ -841,8 +839,6 @@ def _player_lookup_map(
                 func.lower(func.trim(Player.player_code)) == normalized_text,
             )
         )
-        if team_admin_id is not None:
-            query = query.join(Team, Player.team_id == Team.team_id).where(Team.team_admin_id == team_admin_id)
         player = db.scalar(query)
         if player:
             players_by_key[normalized_text] = player
