@@ -1824,7 +1824,7 @@
           <h2>Enter Match Result</h2>
         </div>
         {% if played_fixtures %}
-        <form class="form-grid result-upload-form" method="post" action="/team-admin/results" data-result-form data-approved-team-ids="{{ approved_team_ids | tojson }}" data-result-api="/api/team-admin/result-players">
+        <form class="form-grid result-upload-form" method="post" action="/team-admin/results" data-result-form data-approved-team-ids="{{ approved_team_ids | tojson }}" data-owned-team-ids="{{ owned_approved_team_ids | tojson }}" data-primary-team-id="{{ primary_team_id or '' }}" data-result-api="/api/team-admin/result-players">
           <label class="result-field result-field--full">Played fixture
             <select id="result-fixture-select" name="fixture_id" required>
               <option value="">Select a played fixture</option>
@@ -2337,6 +2337,8 @@
     const resultTypeSelect = document.getElementById('result-type-select');
     const editButtons = Array.from(document.querySelectorAll('[data-edit-result]'));
     const approvedTeamIds = new Set(JSON.parse(form.dataset.approvedTeamIds || '[]').map((value) => String(value)));
+    const ownedTeamIds = new Set(JSON.parse(form.dataset.ownedTeamIds || '[]').map((value) => String(value)));
+    const primaryTeamId = String(form.dataset.primaryTeamId || '');
     const playerCache = new Map();
     let fixturePlayers = null;
     let currentSubmittingTeamId = null;
@@ -2467,11 +2469,37 @@
       }
       const homeTeamId = String(option.dataset.homeTeamId || '');
       const awayTeamId = String(option.dataset.awayTeamId || '');
+      if (ownedTeamIds.has(homeTeamId)) {
+        return homeTeamId;
+      }
+      if (ownedTeamIds.has(awayTeamId)) {
+        return awayTeamId;
+      }
+      if (primaryTeamId && primaryTeamId === homeTeamId) {
+        return homeTeamId;
+      }
+      if (primaryTeamId && primaryTeamId === awayTeamId) {
+        return awayTeamId;
+      }
       if (approvedTeamIds.has(homeTeamId)) {
         return homeTeamId;
       }
       if (approvedTeamIds.has(awayTeamId)) {
         return awayTeamId;
+      }
+      return null;
+    };
+
+    const getSubmittingSide = (option) => {
+      const submittingTeamId = getSubmittingTeamId(option);
+      if (!option || !submittingTeamId) {
+        return null;
+      }
+      if (String(submittingTeamId) === String(option.dataset.homeTeamId || '')) {
+        return 'home';
+      }
+      if (String(submittingTeamId) === String(option.dataset.awayTeamId || '')) {
+        return 'away';
       }
       return null;
     };
@@ -2524,6 +2552,7 @@
       const homeScore = Number(homeScoreInput.value || 0);
       const awayScore = Number(awayScoreInput.value || 0);
       const submittingTeamId = getSubmittingTeamId(option);
+      const submittingSide = getSubmittingSide(option);
       const isSpecial = specialResultTypes.has(getSelectedResultType());
       currentSubmittingTeamId = submittingTeamId;
 
@@ -2532,7 +2561,7 @@
       updateStatusNote(option);
 
       if (isSpecial) {
-        const isHomeSide = option ? String(submittingTeamId) === String(option.dataset.homeTeamId) : false;
+        const isHomeSide = submittingSide === 'home';
         homeScoreInput.value = isHomeSide ? '3' : '0';
         awayScoreInput.value = isHomeSide ? '0' : '3';
         homeScoreInput.readOnly = true;
@@ -2550,7 +2579,12 @@
         return;
       }
 
-      const expectedCount = String(submittingTeamId) === String(option.dataset.homeTeamId) ? homeScore : awayScore;
+      if (!submittingSide) {
+        showEmptyState('This fixture is not linked to one of your approved clubs.');
+        return;
+      }
+
+      const expectedCount = submittingSide === 'home' ? homeScore : awayScore;
       if (!expectedCount && expectedCount !== 0) {
         showEmptyState('Enter your team score to generate goal rows.');
         return;
@@ -2661,9 +2695,14 @@
     form.addEventListener('submit', (event) => {
       const option = getSelectedFixtureOption();
       const submittingTeamId = getSubmittingTeamId(option);
+      const submittingSide = getSubmittingSide(option);
       const isSpecial = specialResultTypes.has(getSelectedResultType());
-      const expectedCount = String(submittingTeamId) === String(option?.dataset.homeTeamId || '') ? Number(homeScoreInput.value || 0) : Number(awayScoreInput.value || 0);
-      if (!fixtureSelect.value || (!isSpecial && expectedCount > 0 && !goalRows.querySelector('[data-goal-row]'))) {
+      const expectedCount = submittingSide === 'home'
+        ? Number(homeScoreInput.value || 0)
+        : submittingSide === 'away'
+          ? Number(awayScoreInput.value || 0)
+          : 0;
+      if (!fixtureSelect.value || !submittingTeamId || (!isSpecial && expectedCount > 0 && !goalRows.querySelector('[data-goal-row]'))) {
         event.preventDefault();
       }
     });

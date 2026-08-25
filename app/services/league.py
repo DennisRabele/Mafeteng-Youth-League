@@ -708,8 +708,14 @@ def _team_admin_fixture_context(
     *,
     team_admin_id: int,
     approved_team_ids: Iterable[int] | None = None,
+    owned_team_ids: Iterable[int] | None = None,
 ) -> tuple[Team, Team, str]:
     approved_team_id_set = {int(team_id) for team_id in approved_team_ids or []}
+    owned_team_id_set = {int(team_id) for team_id in owned_team_ids or []}
+    if fixture.home_team and fixture.home_team.team_id in owned_team_id_set:
+        return fixture.home_team, fixture.away_team, "home"
+    if fixture.away_team and fixture.away_team.team_id in owned_team_id_set:
+        return fixture.away_team, fixture.home_team, "away"
     if fixture.home_team and fixture.home_team.team_id in approved_team_id_set:
         return fixture.home_team, fixture.away_team, "home"
     if fixture.away_team and fixture.away_team.team_id in approved_team_id_set:
@@ -1047,6 +1053,7 @@ def submit_match_result(
     *,
     team_admin_id: int,
     approved_team_ids: Iterable[int] | None = None,
+    owned_team_ids: Iterable[int] | None = None,
     fixture_id: int,
     home_score: int,
     away_score: int,
@@ -1068,6 +1075,7 @@ def submit_match_result(
         fixture,
         team_admin_id=team_admin_id,
         approved_team_ids=approved_team_ids,
+        owned_team_ids=owned_team_ids,
     )
     normalized_result_type = _normalize_result_type(result_type)
     scorer_ids = _coerce_selected_player_ids(scorer_player_ids)

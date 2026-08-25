@@ -98,6 +98,7 @@ from app.services.team_access import (
     load_team_admin_approved_teams,
     load_team_admin_primary_team,
     load_team_admin_owned_approved_teams,
+    load_team_admin_owned_approved_team_ids,
     load_team_admin_teams,
     team_admin_has_access_to_team,
 )
@@ -1723,9 +1724,11 @@ def team_admin_dashboard(
     teams = load_team_admin_teams(db, team_admin.team_admin_id)
     approved_teams = load_team_admin_approved_teams(db, team_admin.team_admin_id)
     owned_approved_teams = load_team_admin_owned_approved_teams(db, team_admin.team_admin_id)
+    owned_approved_team_ids = load_team_admin_owned_approved_team_ids(db, team_admin.team_admin_id)
     approved_team = approved_teams[0] if approved_teams else None
     approved_team_id = approved_team.team_id if approved_team else None
     approved_team_ids = [team.team_id for team in approved_teams]
+    primary_team_id = owned_approved_team_ids[0] if owned_approved_team_ids else approved_team_id
     can_register_clubs = bool(owned_approved_teams) or not approved_teams
     players = db.scalars(
         select(Player)
@@ -1937,6 +1940,8 @@ def team_admin_dashboard(
             "approved_team": approved_team,
             "approved_team_id": approved_team_id,
             "approved_team_ids": approved_team_ids,
+            "owned_approved_team_ids": owned_approved_team_ids,
+            "primary_team_id": primary_team_id,
             "can_register_clubs": can_register_clubs,
             "players": players,
             "approved_players": approved_players,
@@ -2473,11 +2478,13 @@ def submit_result_route(
 ):
     team_admin = _require_team_admin(request, db)
     approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    owned_team_ids = load_team_admin_owned_approved_team_ids(db, team_admin.team_admin_id)
     try:
         submit_match_result(
             db,
             team_admin_id=team_admin.team_admin_id,
             approved_team_ids=approved_team_ids,
+            owned_team_ids=owned_team_ids,
             fixture_id=fixture_id,
             home_score=home_score,
             away_score=away_score,
