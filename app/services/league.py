@@ -859,14 +859,30 @@ def _assert_player_belongs_to_team(
     label: str,
     *,
     fixture_category_name: str | None = None,
+    row_index: int | None = None,
 ) -> None:
-    if not player or player.status != ApprovalStatus.APPROVED.value or not player.team:
-        raise RegistrationError(f"Select only approved players from your own club for {label}.")
-    if player.team_id != submitting_team.team_id:
-        raise RegistrationError(f"Select only approved players from your own club for {label}.")
-    if not player_matches_exact_category(player, fixture_category_name or submitting_team.category.category_name if submitting_team.category else None):
+    row_prefix = f"Goal {row_index + 1} {label[:-1]}" if row_index is not None and label.endswith("s") else f"Goal {row_index + 1} {label}" if row_index is not None else label
+    expected_category_name = fixture_category_name or (submitting_team.category.category_name if submitting_team.category else None)
+
+    if not player:
         raise RegistrationError(
-            f"{player.full_name} is not eligible for {fixture_category_name or submitting_team.category.category_name or 'this fixture'}."
+            f"{row_prefix.capitalize()} could not be resolved. Please re-select the player from the dropdown before submitting."
+        )
+    if player.status != ApprovalStatus.APPROVED.value:
+        raise RegistrationError(
+            f"{row_prefix.capitalize()} {player.full_name} is not approved yet."
+        )
+    if not player.team:
+        raise RegistrationError(
+            f"{row_prefix.capitalize()} {player.full_name} is not linked to a club."
+        )
+    if player.team_id != submitting_team.team_id:
+        raise RegistrationError(
+            f"{row_prefix.capitalize()} {player.full_name} belongs to {player.team.team_name}, but the submitting club is {submitting_team.team_name}."
+        )
+    if not player_matches_exact_category(player, expected_category_name):
+        raise RegistrationError(
+            f"{row_prefix.capitalize()} {player.full_name} is registered in {player.team.category.category_name if player.team.category else 'an unknown category'}, but this fixture is for {expected_category_name or 'an unknown category'}."
         )
 
 
@@ -1166,6 +1182,7 @@ def submit_match_result(
                 submitting_team,
                 "scorers",
                 fixture_category_name=fixture.category.category_name if fixture.category else None,
+                row_index=index,
             )
             scorer_players.append(scorer)
             assister_id = assister_ids[index] if index < len(assister_ids) else None
@@ -1176,6 +1193,7 @@ def submit_match_result(
                     submitting_team,
                     "assisters",
                     fixture_category_name=fixture.category.category_name if fixture.category else None,
+                    row_index=index,
                 )
             assister_players.append(assister)
 
