@@ -1727,8 +1727,8 @@ def team_admin_dashboard(
     owned_approved_team_ids = load_team_admin_owned_approved_team_ids(db, team_admin.team_admin_id)
     approved_team = approved_teams[0] if approved_teams else None
     approved_team_id = approved_team.team_id if approved_team else None
+    primary_team_id = team_admin.team_id or approved_team_id
     approved_team_ids = [team.team_id for team in approved_teams]
-    primary_team_id = owned_approved_team_ids[0] if owned_approved_team_ids else approved_team_id
     can_register_clubs = bool(owned_approved_teams) or not approved_teams
     players = db.scalars(
         select(Player)
@@ -2483,6 +2483,7 @@ def submit_result_route(
         submit_match_result(
             db,
             team_admin_id=team_admin.team_admin_id,
+            primary_team_id=team_admin.team_id,
             approved_team_ids=approved_team_ids,
             owned_team_ids=owned_team_ids,
             fixture_id=fixture_id,

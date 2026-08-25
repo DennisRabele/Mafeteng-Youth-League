@@ -2469,16 +2469,16 @@
       }
       const homeTeamId = String(option.dataset.homeTeamId || '');
       const awayTeamId = String(option.dataset.awayTeamId || '');
-      if (ownedTeamIds.has(homeTeamId)) {
-        return homeTeamId;
-      }
-      if (ownedTeamIds.has(awayTeamId)) {
-        return awayTeamId;
-      }
       if (primaryTeamId && primaryTeamId === homeTeamId) {
         return homeTeamId;
       }
       if (primaryTeamId && primaryTeamId === awayTeamId) {
+        return awayTeamId;
+      }
+      if (ownedTeamIds.has(homeTeamId)) {
+        return homeTeamId;
+      }
+      if (ownedTeamIds.has(awayTeamId)) {
         return awayTeamId;
       }
       if (approvedTeamIds.has(homeTeamId)) {
