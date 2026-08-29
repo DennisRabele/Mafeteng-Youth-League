@@ -867,24 +867,32 @@ def _assert_player_belongs_to_team(
     submitted_text = "" if submitted_value is None else str(submitted_value).strip()
 
     if not player:
+        if not submitted_text:
+            raise RegistrationError(
+                f"{row_prefix.capitalize()} submission is empty. The player id was not posted from the dropdown."
+            )
+        if not re.fullmatch(r"\d+", submitted_text):
+            raise RegistrationError(
+                f"{row_prefix.capitalize()} submitted value '{submitted_text}' is not a numeric player id."
+            )
         raise RegistrationError(
-            f"{row_prefix.capitalize()} player id could not be parsed or resolved from '{submitted_text or 'empty'}'. Please re-select the player from the dropdown before submitting."
+            f"{row_prefix.capitalize()} player id {submitted_text} was not found in the database."
         )
     if player.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError(
-            f"{row_prefix.capitalize()} {player.full_name} is not approved yet."
+            f"{row_prefix.capitalize()} player id {player.player_id} belongs to {player.full_name}, but that player is not approved yet."
         )
     if not player.team:
         raise RegistrationError(
-            f"{row_prefix.capitalize()} {player.full_name} is not linked to a club."
+            f"{row_prefix.capitalize()} player id {player.player_id} belongs to {player.full_name}, but that player is not linked to a club."
         )
     if player.team_id != submitting_team.team_id:
         raise RegistrationError(
-            f"{row_prefix.capitalize()} {player.full_name} belongs to {player.team.team_name}, but the submitting club is {submitting_team.team_name}."
+            f"{row_prefix.capitalize()} player id {player.player_id} belongs to {player.full_name} of {player.team.team_name}, but the submitting club is {submitting_team.team_name}."
         )
     if not player_matches_exact_category(player, expected_category_name):
         raise RegistrationError(
-            f"{row_prefix.capitalize()} {player.full_name} is registered in {player.team.category.category_name if player.team.category else 'an unknown category'}, but this fixture is for {expected_category_name or 'an unknown category'}."
+            f"{row_prefix.capitalize()} player id {player.player_id} belongs to {player.full_name} of {player.team.team_name}, but is registered in {player.team.category.category_name if player.team.category else 'an unknown category'} while this fixture is for {expected_category_name or 'an unknown category'}."
         )
 
 
