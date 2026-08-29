@@ -2549,7 +2549,7 @@ def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, obje
         players = [player for player in players if player_matches_exact_category(player, fixture.category.category_name)]
         return [
             {
-                "player_id": player.player_id,
+                "player_id": str(player.player_id),
                 "full_name": player.full_name,
                 "player_name": player.full_name,
                 "player_code": player.player_code,
