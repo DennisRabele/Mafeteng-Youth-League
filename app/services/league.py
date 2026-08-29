@@ -860,13 +860,15 @@ def _assert_player_belongs_to_team(
     *,
     fixture_category_name: str | None = None,
     row_index: int | None = None,
+    submitted_value: int | str | None = None,
 ) -> None:
     row_prefix = f"Goal {row_index + 1} {label[:-1]}" if row_index is not None and label.endswith("s") else f"Goal {row_index + 1} {label}" if row_index is not None else label
     expected_category_name = fixture_category_name or (submitting_team.category.category_name if submitting_team.category else None)
+    submitted_text = "" if submitted_value is None else str(submitted_value).strip()
 
     if not player:
         raise RegistrationError(
-            f"{row_prefix.capitalize()} could not be resolved. Please re-select the player from the dropdown before submitting."
+            f"{row_prefix.capitalize()} player id could not be parsed or resolved from '{submitted_text or 'empty'}'. Please re-select the player from the dropdown before submitting."
         )
     if player.status != ApprovalStatus.APPROVED.value:
         raise RegistrationError(
@@ -1183,6 +1185,7 @@ def submit_match_result(
                 "scorers",
                 fixture_category_name=fixture.category.category_name if fixture.category else None,
                 row_index=index,
+                submitted_value=scorer_id,
             )
             scorer_players.append(scorer)
             assister_id = assister_ids[index] if index < len(assister_ids) else None
@@ -1194,6 +1197,7 @@ def submit_match_result(
                     "assisters",
                     fixture_category_name=fixture.category.category_name if fixture.category else None,
                     row_index=index,
+                    submitted_value=assister_id,
                 )
             assister_players.append(assister)
 
