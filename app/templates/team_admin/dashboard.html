@@ -1886,13 +1886,15 @@
           <div class="result-goal-row" data-goal-row>
             <div class="result-goal-row__title"></div>
             <label>Scorer
-              <select data-player-select="scorer" name="scorer_player_ids" required></select>
+              <select data-player-select="scorer" required></select>
             </label>
+            <input type="hidden" name="scorer_player_ids" value="">
             <label>Assister
-              <select data-player-select="assist" name="assist_player_ids">
+              <select data-player-select="assist">
                 <option value="">No assist</option>
               </select>
             </label>
+            <input type="hidden" name="assist_player_ids" value="">
             <label>Goal type
               <select data-goal-type name="goal_types" required>
                 <option value="Penalty">Penalty</option>
@@ -2383,7 +2385,9 @@
 
     const syncGoalRowSubmissionFields = (row) => {
       const scorerSelect = row.querySelector('[data-player-select="scorer"]');
+      const scorerHidden = row.querySelector('input[name="scorer_player_ids"]');
       const assistSelect = row.querySelector('[data-player-select="assist"]');
+      const assistHidden = row.querySelector('input[name="assist_player_ids"]');
       const goalTypeSelect = row.querySelector('[data-goal-type]');
       const isOwnGoal = goalTypeSelect?.value === 'Own Goal';
 
@@ -2398,6 +2402,12 @@
         if (isOwnGoal) {
           assistSelect.value = '';
         }
+      }
+      if (scorerHidden) {
+        scorerHidden.value = isOwnGoal ? '' : (scorerSelect?.value || '');
+      }
+      if (assistHidden) {
+        assistHidden.value = isOwnGoal ? '' : (assistSelect?.value || '');
       }
     };
 
@@ -2420,6 +2430,10 @@
 
     const setPendingEdit = (payload) => {
       pendingEditPayload = payload;
+    };
+
+    const syncAllGoalRowSubmissionFields = () => {
+      Array.from(goalRows.querySelectorAll('[data-goal-row]')).forEach((row) => syncGoalRowSubmissionFields(row));
     };
 
     const showEmptyState = (message) => {
@@ -2618,6 +2632,8 @@
         const scorerSelect = row.querySelector('[data-player-select="scorer"]');
         const assistSelect = row.querySelector('[data-player-select="assist"]');
         const goalTypeSelect = row.querySelector('[data-goal-type]');
+        const scorerHidden = row.querySelector('input[name="scorer_player_ids"]');
+        const assistHidden = row.querySelector('input[name="assist_player_ids"]');
         const selectedScorerId = desiredScorerName ? findPlayerIdByName(players, desiredScorerName) : currentScorer;
         const selectedAssistId = desiredAssistName ? findPlayerIdByName(players, desiredAssistName) : currentAssist;
         scorerSelect.innerHTML = buildPlayerOptions(players, selectedScorerId);
@@ -2627,6 +2643,12 @@
         assistSelect.addEventListener('change', () => syncGoalRowSubmissionFields(row));
         goalTypeSelect.addEventListener('change', () => syncGoalRowSubmissionFields(row));
         syncGoalRowSubmissionFields(row);
+        if (scorerHidden) {
+          scorerHidden.value = scorerSelect.value || '';
+        }
+        if (assistHidden) {
+          assistHidden.value = assistSelect.value || '';
+        }
         goalRows.appendChild(row);
       }
     };
@@ -2680,6 +2702,7 @@
       const submittingTeamId = getSubmittingTeamId(option);
       const submittingSide = getSubmittingSide(option);
       const isSpecial = specialResultTypes.has(getSelectedResultType());
+      syncAllGoalRowSubmissionFields();
       const expectedCount = submittingSide === 'home'
         ? Number(homeScoreInput.value || 0)
         : submittingSide === 'away'
