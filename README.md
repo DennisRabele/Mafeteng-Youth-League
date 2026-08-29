@@ -46,6 +46,7 @@ The sender email address is required; an app password alone cannot send SMTP mai
 ## Hosting Notes
 
 - Supabase/Postgres: set `DATABASE_URL` to the Supabase pooled Postgres URL, using `postgresql+psycopg://...` and `sslmode=require`.
+- CockroachDB Cloud: if you use the Cockroach Cloud connection string with `sslmode=verify-full`, include `sslrootcert=system` for Vercel or other serverless hosts that do not ship a local `root.crt`, for example `cockroachdb+psycopg://...?...sslmode=verify-full&sslrootcert=system`.
 - Supabase Storage: set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, and make the buckets public so stored URLs render in the app. The bucket names used by this repo are `admin photos`, `team logos`, `player documents`, `player photos`, and `player agreements`.
 - Vercel split deployment: create two Vercel projects from the same GitHub repo. Set `APP_MODE=team_admin` for the Team Admin project and `APP_MODE=super_admin` for the Super Admin project. Both projects use the same Supabase and SMTP environment variables.
 - Vercel routing: [`vercel.json`](vercel.json) rewrites all requests to `api/index.py`, which boots the app mode selected by `APP_MODE`.

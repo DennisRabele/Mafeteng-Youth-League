@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -24,16 +25,35 @@ _load_dotenv()
 
 def _normalize_database_url(database_url: str) -> str:
     if database_url.startswith("cockroachdb+psycopg://"):
+        normalized = database_url
+    elif database_url.startswith("cockroachdb://"):
+        normalized = "cockroachdb+psycopg://" + database_url.removeprefix("cockroachdb://")
+    elif database_url.startswith("postgresql://"):
+        normalized = "cockroachdb+psycopg://" + database_url.removeprefix("postgresql://")
+    elif database_url.startswith("postgresql+psycopg://"):
+        normalized = "cockroachdb+psycopg://" + database_url.removeprefix("postgresql+psycopg://")
+    elif database_url.startswith("postgres://"):
+        normalized = "cockroachdb+psycopg://" + database_url.removeprefix("postgres://")
+    else:
+        normalized = database_url
+
+    return _ensure_cockroach_sslrootcert(normalized)
+
+
+def _ensure_cockroach_sslrootcert(database_url: str) -> str:
+    parsed = urlsplit(database_url)
+    host = parsed.hostname or ""
+    if not host.endswith(".cockroachlabs.cloud"):
         return database_url
-    if database_url.startswith("cockroachdb://"):
-        return "cockroachdb+psycopg://" + database_url.removeprefix("cockroachdb://")
-    if database_url.startswith("postgresql://"):
-        return "cockroachdb+psycopg://" + database_url.removeprefix("postgresql://")
-    if database_url.startswith("postgresql+psycopg://"):
-        return "cockroachdb+psycopg://" + database_url.removeprefix("postgresql+psycopg://")
-    if database_url.startswith("postgres://"):
-        return "cockroachdb+psycopg://" + database_url.removeprefix("postgres://")
-    return database_url
+
+    query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    has_verify_full = any(key == "sslmode" and value == "verify-full" for key, value in query_pairs)
+    has_sslrootcert = any(key == "sslrootcert" for key, _ in query_pairs)
+    if not has_verify_full or has_sslrootcert:
+        return database_url
+
+    query_pairs.append(("sslrootcert", "system"))
+    return urlunsplit(parsed._replace(query=urlencode(query_pairs, doseq=True)))
 
 
 class Settings:
