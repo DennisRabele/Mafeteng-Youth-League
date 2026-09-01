@@ -1584,7 +1584,6 @@
         </form>
 
         <script type="application/json" id="match-day-fixture-data">{{ match_day_fixtures_data | tojson }}</script>
-        <script type="application/json" id="match-day-player-data">{{ match_day_players_data | tojson }}</script>
         <script type="application/json" id="match-day-approved-team-ids">{{ approved_team_ids | tojson }}</script>
         <script>
           (function () {
@@ -1601,10 +1600,11 @@
             const squadList = document.querySelector("[data-squad-list]");
             const matchDayError = document.querySelector("[data-match-day-error]");
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
-            const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
+            const matchDayPlayerApi = "/api/team-admin/match-day-squad-players";
             const selectedPlayerIds = new Set();
             let activeFixture = null;
             let activeClub = null;
+            let playerRequestToken = 0;
             let activeTeamId = null;
             const primaryTeamId = "";
 
@@ -1864,10 +1864,11 @@
             const squadList = document.querySelector("[data-squad-list]");
             const matchDayError = document.querySelector("[data-match-day-error]");
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
-            const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
+            const matchDayPlayerApi = "/api/team-admin/match-day-squad-players";
             const selectedPlayerIds = new Set();
             let activeFixture = null;
             let activeClub = null;
+            let playerRequestToken = 0;
 
             const setMatchDayError = (message) => {
               if (!matchDayError) return;
@@ -1878,6 +1879,11 @@
 
             const clearMatchDayError = () => setMatchDayError("");
 
+            const clearSquadList = () => {
+              selectedPlayerIds.clear();
+              squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
+            };
+
             const updateAddButtonState = () => {
               const canAdd = Boolean(activeClub && playerSelect.value && jerseyInput.value.trim());
               jerseyInput.required = Boolean(playerSelect.value);
@@ -1886,7 +1892,7 @@
               }
             };
 
-            const refreshPlayerSelect = () => {
+            const refreshPlayerSelect = async () => {
               if (!activeClub) {
                 playerSelect.innerHTML = '<option value="">Select club first</option>';
                 playerSelect.disabled = true;
@@ -1896,28 +1902,74 @@
                 }
                 return;
               }
-              playerSelect.innerHTML = '<option value="">Select player</option>';
-              const eligiblePlayers = playerData.filter((player) => {
-                return String(player.team_id) === String(activeClub.value) &&
-                  !selectedPlayerIds.has(String(player.player_id));
-              });
-              eligiblePlayers.forEach((player) => {
-                const option = document.createElement("option");
-                option.value = player.player_id;
-                option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group}) - ${player.category_name}`;
-                option.dataset.playerCode = player.player_code;
-                option.dataset.ageGroup = player.age_group;
-                option.dataset.teamName = player.team_name;
-                playerSelect.appendChild(option);
-              });
-              playerSelect.disabled = false;
-              jerseyInput.disabled = false;
-              if (eligiblePlayers.length === 0) {
-                setMatchDayError(`No approved players were loaded for ${activeClub.dataset.clubName || "the selected club"} (club id ${activeClub.value || "unknown"}).`);
-              } else {
-                clearMatchDayError();
+              if (!activeFixture) {
+                playerSelect.innerHTML = '<option value="">Select fixture first</option>';
+                playerSelect.disabled = true;
+                jerseyInput.disabled = true;
+                if (addButton) {
+                  addButton.disabled = true;
+                }
+                return;
               }
-              updateAddButtonState();
+              const requestToken = ++playerRequestToken;
+              playerSelect.innerHTML = '<option value="">Loading players...</option>';
+              playerSelect.disabled = true;
+              jerseyInput.disabled = true;
+              if (addButton) {
+                addButton.disabled = true;
+              }
+              const params = new URLSearchParams({
+                fixture_id: String(fixtureSelect?.value || ""),
+                club_id: String(activeClub.value || ""),
+              });
+              try {
+                const response = await fetch(`${matchDayPlayerApi}?${params.toString()}`, {
+                  headers: {
+                    Accept: "application/json",
+                  },
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (requestToken !== playerRequestToken) {
+                  return;
+                }
+                if (!response.ok) {
+                  playerSelect.innerHTML = '<option value="">Select club first</option>';
+                  setMatchDayError(payload.error || "Could not load players for the selected club.");
+                  return;
+                }
+                const players = Array.isArray(payload.players) ? payload.players : [];
+                const eligiblePlayers = players.filter((player) => !selectedPlayerIds.has(String(player.player_id)));
+                if (eligiblePlayers.length === 0) {
+                  playerSelect.innerHTML = '<option value="">No eligible players</option>';
+                  playerSelect.disabled = true;
+                  jerseyInput.disabled = true;
+                  if (addButton) {
+                    addButton.disabled = true;
+                  }
+                  setMatchDayError(`All eligible players from ${payload.club_name || "the selected club"} are already in the squad list.`);
+                  return;
+                }
+                playerSelect.innerHTML = '<option value="">Select player</option>';
+                eligiblePlayers.forEach((player) => {
+                  const option = document.createElement("option");
+                  option.value = player.player_id;
+                  option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group}) - ${player.category_name}`;
+                  option.dataset.playerCode = player.player_code;
+                  option.dataset.ageGroup = player.age_group;
+                  option.dataset.teamName = player.team_name;
+                  playerSelect.appendChild(option);
+                });
+                playerSelect.disabled = false;
+                jerseyInput.disabled = false;
+                clearMatchDayError();
+                updateAddButtonState();
+              } catch (error) {
+                if (requestToken !== playerRequestToken) {
+                  return;
+                }
+                playerSelect.innerHTML = '<option value="">Select club first</option>';
+                setMatchDayError(`player lookup failed: ${error instanceof Error ? error.message : "unknown error"}`);
+              }
             };
 
             const addPlayerRow = () => {
@@ -1992,6 +2044,8 @@
             const syncFixtureSelection = () => {
               activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
               clearMatchDayError();
+              clearSquadList();
+              refreshPlayerSelect();
             };
 
             fixtureSelect?.addEventListener("change", syncFixtureSelection);

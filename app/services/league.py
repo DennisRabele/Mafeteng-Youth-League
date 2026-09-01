@@ -414,9 +414,9 @@ def create_match_day_squad(
             raise RegistrationError(f"{player.full_name} is not registered for {club.team_name}.")
         if player.status != ApprovalStatus.APPROVED.value:
             raise RegistrationError(f"{player.full_name} is not approved for selection.")
-        if not player_can_play_for_category(player, club.category.category_name):
+        if not player_can_play_for_category(player, fixture.category.category_name):
             raise RegistrationError(
-                f"{player.full_name} is registered in {player.age_group or 'another category'} and cannot be selected for {club.category.category_name}."
+                f"{player.full_name} is registered in {player.age_group or 'another category'} and cannot be selected for {fixture.category.category_name}."
             )
         eligible_players.append(player)
 

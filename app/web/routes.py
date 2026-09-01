@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -2135,6 +2135,94 @@ def create_team_admin_match_day_squad(
             {"error": str(exc)},
         )
     return _redirect(f"/team-admin/dashboard/match-day-squads/{squad.squad_id}/export")
+
+
+@router.get("/api/team-admin/match-day-squad-players")
+def team_admin_match_day_squad_players(
+    request: Request,
+    fixture_id: str,
+    club_id: str,
+    db: Session = Depends(get_db),
+):
+    team_admin = _require_team_admin(request, db)
+    try:
+        parsed_fixture_id = int(str(fixture_id).strip())
+    except (TypeError, ValueError):
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"error": "fixture id not parsed from selected fixture."})
+    try:
+        parsed_club_id = int(str(club_id).strip())
+    except (TypeError, ValueError):
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"error": "club id not parsed from selected club."})
+
+    approved_team_ids = set(load_team_admin_approved_team_ids(db, team_admin.team_admin_id))
+    if parsed_club_id not in approved_team_ids:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"error": f"Club id {parsed_club_id} is not approved for this team admin."},
+        )
+
+    fixture = db.scalar(
+        select(Fixture)
+        .options(
+            selectinload(Fixture.category),
+            selectinload(Fixture.home_team),
+            selectinload(Fixture.away_team),
+        )
+        .where(Fixture.fixture_id == parsed_fixture_id)
+    )
+    if not fixture or not fixture.category or not fixture.home_team or not fixture.away_team:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "Selected fixture could not be found."})
+
+    club = db.scalar(
+        select(Team)
+        .options(selectinload(Team.category))
+        .where(Team.team_id == parsed_club_id)
+    )
+    if not club:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": f"club id {parsed_club_id} could not be found."})
+    if club.status != ApprovalStatus.APPROVED.value:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"error": f"{club.team_name} is not an approved club."})
+    if not club.category:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"error": f"{club.team_name} does not have a valid category."})
+
+    players = db.scalars(
+        select(Player)
+        .options(selectinload(Player.team).selectinload(Team.category))
+        .where(
+            Player.team_id == club.team_id,
+            Player.status == ApprovalStatus.APPROVED.value,
+            Player.is_on_loan.is_(False),
+        )
+        .order_by(Player.full_name.asc(), Player.player_id.asc())
+    ).all()
+    eligible_players = [player for player in players if player_can_play_for_category(player, fixture.category.category_name)]
+    if not eligible_players:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": f"No eligible players were returned for {club.team_name} in {fixture.category.category_name}.",
+                "fixture_category_name": fixture.category.category_name,
+                "club_name": club.team_name,
+            },
+        )
+    return {
+        "fixture_id": fixture.fixture_id,
+        "fixture_category_name": fixture.category.category_name,
+        "club_id": club.team_id,
+        "club_name": club.team_name,
+        "players": [
+            {
+                "player_id": player.player_id,
+                "full_name": player.full_name,
+                "player_code": player.player_code or f"PLAYER-{player.player_id}",
+                "age_group": player.age_group or "-",
+                "team_id": player.team_id,
+                "team_name": player.team.team_name if player.team else "-",
+                "category_name": player.team.category.category_name if player.team and player.team.category else "-",
+            }
+            for player in eligible_players
+        ],
+    }
 
 
 @router.get("/team-admin/dashboard/match-day-squads/{squad_id}/export")
