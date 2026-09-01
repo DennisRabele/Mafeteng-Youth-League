@@ -1913,7 +1913,7 @@
               playerSelect.disabled = false;
               jerseyInput.disabled = false;
               if (eligiblePlayers.length === 0) {
-                setMatchDayError("No approved players were loaded for the selected club.");
+                setMatchDayError(`No approved players were loaded for ${activeClub.dataset.clubName || "the selected club"} (club id ${activeClub.value || "unknown"}).`);
               } else {
                 clearMatchDayError();
               }

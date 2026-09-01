@@ -1751,7 +1751,7 @@ def team_admin_dashboard(
             "full_name": player.full_name,
             "player_code": player.player_code or f"PLAYER-{player.player_id}",
             "age_group": player.age_group or "-",
-            "team_id": player.team.team_id if player.team else None,
+            "team_id": player.team_id,
             "team_name": player.team.team_name if player.team else "-",
             "category_name": player.team.category.category_name if player.team and player.team.category else "-",
         }
