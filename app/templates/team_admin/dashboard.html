@@ -1507,7 +1507,7 @@
       <div class="panel-heading">
         <div>
           <h2>Match Day Squad</h2>
-          <p class="section-copy"><strong>Select a fixture first. The squad sheet will lock to that match and only allow eligible players who can play up into the selected fixture category.</strong></p>
+          <p class="section-copy"><strong>Build the squad from approved clubs, then select a fixture before generating the final list and squad card.</strong></p>
         </div>
       </div>
       <div class="alert" style="background:#fff2cc; border-color:#d9a300; color:#111; margin-bottom: 1rem;">
@@ -1528,49 +1528,11 @@
                 {% endfor %}
               </select>
             </label>
-            <div class="fixture-empty" style="align-self:end; margin:0;">
-              Squad team is selected automatically from the approved club involved in the chosen fixture.
-            </div>
-          </div>
-          <div class="matchday-preview" aria-live="polite">
-            <div class="matchday-preview__head">
-              <div class="matchday-preview__date">
-                <span>Fixture Date</span>
-                <strong data-matchday-fixture-date>Select a fixture</strong>
-              </div>
-              <div class="matchday-preview__meta">
-                <span data-matchday-fixture-venue>Venue will appear here</span>
-                <span data-matchday-fixture-time>Kickoff time will appear here</span>
-              </div>
-            </div>
-            <div class="matchday-preview__teams">
-              <div class="matchday-preview__team matchday-preview__team--home">
-                <span class="fixture-logo-frame" data-matchday-home-logo>
-                  <span class="fixture-logo fallback fixture-logo-frame">H</span>
-                </span>
-                <div>
-                  <span class="matchday-preview__label">Home Team</span>
-                  <strong data-matchday-home-name>Select a fixture</strong>
-                  <small data-matchday-home-note>Home team details will load here.</small>
-                </div>
-              </div>
-              <div class="matchday-preview__vs">VS</div>
-              <div class="matchday-preview__team matchday-preview__team--away" style="justify-content:flex-end; text-align:right;">
-                <div>
-                  <span class="matchday-preview__label">Away Team</span>
-                  <strong data-matchday-away-name>Select a fixture</strong>
-                  <small data-matchday-away-note>Away team details will load here.</small>
-                </div>
-                <span class="fixture-logo-frame" data-matchday-away-logo>
-                  <span class="fixture-logo fallback fixture-logo-frame">A</span>
-                </span>
-              </div>
-            </div>
           </div>
           <div class="squad-builder">
             <div class="squad-builder__head">
               <h3>Select Club</h3>
-              <span class="section-copy">Only approved clubs appear here. Switch clubs to add players from another approved club into the same squad list.</span>
+              <span class="section-copy">Only approved clubs appear here. Add players club by club, then generate the squad once the list is complete.</span>
             </div>
             <div class="form-grid three">
               <label>Club
@@ -1630,6 +1592,7 @@
             if (!form) {
               return;
             }
+            return;
             const fixtureSelect = document.getElementById("match-day-fixture-select");
             const clubSelect = document.getElementById("match-day-club-select");
             const playerSelect = document.getElementById("match-day-player-select");
@@ -1888,26 +1851,16 @@
 
         <script>
           (function () {
-            let form = document.querySelector("[data-match-day-squad-form]");
-            const replaceControl = (element) => {
-              if (!element) {
-                return null;
-              }
-              const clone = element.cloneNode(true);
-              element.replaceWith(clone);
-              return clone;
-            };
-
-            form = replaceControl(form);
+            const form = document.querySelector("[data-match-day-squad-form]");
             if (!form) {
               return;
             }
 
-            const fixtureSelect = replaceControl(document.getElementById("match-day-fixture-select"));
-            const clubSelect = replaceControl(document.getElementById("match-day-club-select"));
-            const playerSelect = replaceControl(document.getElementById("match-day-player-select"));
-            const jerseyInput = replaceControl(document.getElementById("match-day-jersey-input"));
-            const addButton = replaceControl(document.querySelector("[data-add-player]"));
+            const fixtureSelect = document.getElementById("match-day-fixture-select");
+            const clubSelect = document.getElementById("match-day-club-select");
+            const playerSelect = document.getElementById("match-day-player-select");
+            const jerseyInput = document.getElementById("match-day-jersey-input");
+            const addButton = document.querySelector("[data-add-player]");
             const squadList = document.querySelector("[data-squad-list]");
             const matchDayError = document.querySelector("[data-match-day-error]");
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
@@ -1915,37 +1868,6 @@
             const selectedPlayerIds = new Set();
             let activeFixture = null;
             let activeClub = null;
-
-            const extractAgeGroup = (value) => {
-              const match = String(value || "").toUpperCase().match(/\bU\d{2}\b/);
-              return match ? match[0] : "";
-            };
-
-            const extractGender = (value) => {
-              const normalized = String(value || "").trim().toLowerCase();
-              if (normalized.startsWith("male")) return "male";
-              if (normalized.startsWith("female")) return "female";
-              return "";
-            };
-
-            const canPlayForCategory = (player, sourceCategory) => {
-              const targetAgeGroup = extractAgeGroup(sourceCategory);
-              const playerAgeGroup = extractAgeGroup(player.age_group);
-              const targetGender = extractGender(sourceCategory);
-              const playerGender = extractGender(player.category_name);
-              const allowedTargets = {
-                male: { U13: ["U13", "U15", "U17"], U15: ["U15", "U17"], U17: ["U17"] },
-                female: { U13: ["U13", "U15", "U17"], U15: ["U15", "U17", "U20"], U17: ["U17", "U20"], U20: ["U20"] },
-              };
-              return Boolean(
-                targetAgeGroup &&
-                playerAgeGroup &&
-                targetGender &&
-                playerGender &&
-                targetGender === playerGender &&
-                allowedTargets[playerGender]?.[playerAgeGroup]?.includes(targetAgeGroup)
-              );
-            };
 
             const setMatchDayError = (message) => {
               if (!matchDayError) return;
@@ -1956,50 +1878,12 @@
 
             const clearMatchDayError = () => setMatchDayError("");
 
-            const renderTeamLogo = (container, teamName, logoUrl) => {
-              if (!container) return;
-              container.innerHTML = "";
-              if (logoUrl) {
-                const image = document.createElement("img");
-                image.className = "fixture-logo";
-                image.src = logoUrl;
-                image.alt = teamName || "Team logo";
-                container.appendChild(image);
-                return;
-              }
-              const fallback = document.createElement("span");
-              fallback.className = "fixture-logo fallback fixture-logo-frame";
-              fallback.textContent = String(teamName || "?").trim().slice(0, 1).toUpperCase() || "?";
-              container.appendChild(fallback);
-            };
-
-            const updateFixturePreview = (fixture) => {
-              const dateNode = document.querySelector("[data-matchday-fixture-date]");
-              const venueNode = document.querySelector("[data-matchday-fixture-venue]");
-              const timeNode = document.querySelector("[data-matchday-fixture-time]");
-              const homeNameNode = document.querySelector("[data-matchday-home-name]");
-              const awayNameNode = document.querySelector("[data-matchday-away-name]");
-              const homeNoteNode = document.querySelector("[data-matchday-home-note]");
-              const awayNoteNode = document.querySelector("[data-matchday-away-note]");
-              const homeLogoNode = document.querySelector("[data-matchday-home-logo]");
-              const awayLogoNode = document.querySelector("[data-matchday-away-logo]");
-              const homeTeamName = fixture?.home_team?.team_name || "Select a fixture";
-              const awayTeamName = fixture?.away_team?.team_name || "Select a fixture";
-              if (dateNode) dateNode.textContent = fixture?.fixture_date || "Select a fixture";
-              if (venueNode) venueNode.textContent = fixture?.venue || "Venue will appear here";
-              if (timeNode) timeNode.textContent = fixture?.dashboard_time || "Kickoff time will appear here";
-              if (homeNameNode) homeNameNode.textContent = homeTeamName;
-              if (awayNameNode) awayNameNode.textContent = awayTeamName;
-              if (homeNoteNode) homeNoteNode.textContent = fixture ? `Home team: ${homeTeamName}` : "Home team details will load here.";
-              if (awayNoteNode) awayNoteNode.textContent = fixture ? `Away team: ${awayTeamName}` : "Away team details will load here.";
-              renderTeamLogo(homeLogoNode, homeTeamName, fixture?.home_team?.logo || "");
-              renderTeamLogo(awayLogoNode, awayTeamName, fixture?.away_team?.logo || "");
-            };
-
             const updateAddButtonState = () => {
               const canAdd = Boolean(activeClub && playerSelect.value && jerseyInput.value.trim());
               jerseyInput.required = Boolean(playerSelect.value);
-              addButton.disabled = !canAdd;
+              if (addButton) {
+                addButton.disabled = !canAdd;
+              }
             };
 
             const refreshPlayerSelect = () => {
@@ -2007,14 +1891,14 @@
                 playerSelect.innerHTML = '<option value="">Select club first</option>';
                 playerSelect.disabled = true;
                 jerseyInput.disabled = true;
-                addButton.disabled = true;
+                if (addButton) {
+                  addButton.disabled = true;
+                }
                 return;
               }
               playerSelect.innerHTML = '<option value="">Select player</option>';
-              const selectedCategory = activeClub.dataset.clubCategory || "";
               const eligiblePlayers = playerData.filter((player) => {
                 return String(player.team_id) === String(activeClub.value) &&
-                  canPlayForCategory(player, selectedCategory) &&
                   !selectedPlayerIds.has(String(player.player_id));
               });
               eligiblePlayers.forEach((player) => {
@@ -2029,7 +1913,7 @@
               playerSelect.disabled = false;
               jerseyInput.disabled = false;
               if (eligiblePlayers.length === 0) {
-                setMatchDayError("No eligible players found for the selected club.");
+                setMatchDayError("No approved players were loaded for the selected club.");
               } else {
                 clearMatchDayError();
               }
@@ -2037,19 +1921,18 @@
             };
 
             const addPlayerRow = () => {
-              const selectedClub = activeClub;
               const playerId = playerSelect.value;
               const selectedOption = playerSelect.selectedOptions[0];
               const jerseyNumber = jerseyInput.value.trim();
               const jerseyValue = Number(jerseyNumber);
-              const clubId = selectedClub?.value || "";
-              const clubName = selectedClub?.dataset.clubName || selectedClub?.textContent || "";
+              const clubId = activeClub?.value || "";
+              const clubName = activeClub?.dataset.clubName || activeClub?.textContent || "";
               if (!clubId) {
-                setMatchDayError("Select a club before adding players.");
+                setMatchDayError("club id not parsed from selected club.");
                 return;
               }
               if (!playerId || !selectedOption) {
-                setMatchDayError("Select a player from the dropdown before adding it.");
+                setMatchDayError("player id not parsed from selected player.");
                 return;
               }
               if (!jerseyNumber || !Number.isInteger(jerseyValue) || jerseyValue < 1 || jerseyValue > 99) {
@@ -2102,12 +1985,13 @@
 
             const syncClubSelection = () => {
               activeClub = clubSelect?.selectedOptions?.[0] && clubSelect.value ? clubSelect.selectedOptions[0] : null;
+              clearMatchDayError();
               refreshPlayerSelect();
             };
 
             const syncFixtureSelection = () => {
               activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
-              updateFixturePreview(activeFixture);
+              clearMatchDayError();
             };
 
             fixtureSelect?.addEventListener("change", syncFixtureSelection);
@@ -2124,7 +2008,6 @@
             jerseyInput?.addEventListener("input", updateAddButtonState);
             jerseyInput?.addEventListener("change", updateAddButtonState);
 
-            updateFixturePreview(null);
             syncFixtureSelection();
             syncClubSelection();
 
@@ -2143,6 +2026,11 @@
                 event.preventDefault();
                 setMatchDayError("Add at least one player to the squad list.");
                 return;
+              }
+              const missingPlayerIdRow = squadList.querySelector("[data-squad-row]:not([data-player-id])");
+              if (missingPlayerIdRow) {
+                event.preventDefault();
+                setMatchDayError("player id not parsed from squad list row.");
               }
             });
           })();

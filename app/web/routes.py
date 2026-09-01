@@ -2041,31 +2041,31 @@ def create_team_admin_match_day_squad(
         return _render(
             request,
             "team_admin/action_result.html",
-            {"error": "Select a club for each player in the squad."},
+            {"error": "club id not parsed from squad list."},
         )
     if not player_ids:
         return _render(
             request,
             "team_admin/action_result.html",
-            {"error": "Select at least one player for the squad."},
+            {"error": "player id not parsed from squad list."},
         )
     if not jersey_numbers:
         return _render(
             request,
             "team_admin/action_result.html",
-            {"error": "Enter jersey numbers for each selected player."},
+            {"error": "jersey number not parsed from squad list."},
         )
     if len(club_ids) != len(player_ids):
         return _render(
             request,
             "team_admin/action_result.html",
-            {"error": "Each selected player must have a club assigned."},
+            {"error": "club id not parsed for every squad row."},
         )
     if len(player_ids) != len(jersey_numbers):
         return _render(
             request,
             "team_admin/action_result.html",
-            {"error": "Each selected player must have a jersey number."},
+            {"error": "jersey number not parsed for every squad row."},
         )
     parsed_club_ids: list[int] = []
     for index, value in enumerate(club_ids):
