@@ -347,7 +347,7 @@ def create_match_day_squad(
     db: Session,
     *,
     fixture_id: int,
-    team_id: int,
+    club_ids: list[int],
     generated_by_team_admin_id: int,
     player_ids: list[int],
     jersey_numbers: list[int],
@@ -365,32 +365,35 @@ def create_match_day_squad(
     )
     if not fixture or not fixture.category or not fixture.home_team or not fixture.away_team:
         raise RegistrationError("Selected fixture could not be found.")
-    team = db.scalar(
-        select(Team)
-        .options(selectinload(Team.category), selectinload(Team.players))
-        .where(
-            Team.team_id == team_id,
-            Team.status == ApprovalStatus.APPROVED.value,
-        )
-    )
-    if not team or not team.category:
-        raise RegistrationError("Selected team does not exist or is not approved.")
-    if team.team_id not in {fixture.home_team_id, fixture.away_team_id}:
-        raise RegistrationError("Selected team is not part of the chosen fixture.")
-    if not _category_can_play_up(team.category.category_name, fixture.category.category_name):
-        raise RegistrationError("Selected team cannot play in the chosen fixture category.")
-
-    if not _category_age_group(team.category.category_name):
-        raise RegistrationError("Selected team category is not eligible for match day squads.")
-
+    if not club_ids:
+        raise RegistrationError("Select a club for each player in the squad.")
     if not player_ids:
         raise RegistrationError("Select at least one player for the squad.")
+    if len(club_ids) != len(player_ids):
+        raise RegistrationError("Each selected player must have a club assigned.")
     if len(player_ids) != len(jersey_numbers):
         raise RegistrationError("Each selected player must have a jersey number.")
     if len(set(player_ids)) != len(player_ids):
         raise RegistrationError("Each player can only appear once in the squad.")
     if len(set(jersey_numbers)) != len(jersey_numbers):
         raise RegistrationError("Each jersey number must be unique.")
+
+    clubs = db.scalars(
+        select(Team)
+        .options(selectinload(Team.category), selectinload(Team.players))
+        .where(
+            Team.team_id.in_(club_ids),
+            Team.status == ApprovalStatus.APPROVED.value,
+        )
+    ).all()
+    club_map = {club.team_id: club for club in clubs}
+    if len(club_map) != len(set(club_ids)):
+        raise RegistrationError("One or more selected clubs could not be found.")
+    for club in club_map.values():
+        if not club.category:
+            raise RegistrationError(f"{club.team_name} does not have a valid category.")
+        if not _category_age_group(club.category.category_name):
+            raise RegistrationError(f"{club.team_name} category is not eligible for match day squads.")
 
     players = db.scalars(
         select(Player)
@@ -402,21 +405,27 @@ def create_match_day_squad(
         raise RegistrationError("One or more selected players could not be found.")
 
     eligible_players: list[Player] = []
-    for player_id in player_ids:
+    for index, (player_id, club_id) in enumerate(zip(player_ids, club_ids, strict=True)):
         player = player_map[player_id]
+        club = club_map.get(club_id)
+        if not club or not club.category:
+            raise RegistrationError(f"Selected club at row {index + 1} could not be found.")
+        if player.team_id != club.team_id:
+            raise RegistrationError(f"{player.full_name} is not registered for {club.team_name}.")
         if player.status != ApprovalStatus.APPROVED.value:
             raise RegistrationError(f"{player.full_name} is not approved for selection.")
-        if not player_can_play_for_category(player, team.category.category_name):
+        if not player_can_play_for_category(player, club.category.category_name):
             raise RegistrationError(
-                f"{player.full_name} is registered in {player.age_group or 'another category'} and cannot be selected for {team.category.category_name}."
+                f"{player.full_name} is registered in {player.age_group or 'another category'} and cannot be selected for {club.category.category_name}."
             )
         eligible_players.append(player)
 
+    base_club = club_map[club_ids[0]]
     now = datetime.utcnow()
     squad = MatchDaySquad(
         fixture_id=fixture.fixture_id,
-        team_id=team.team_id,
-        category_id=team.category_id,
+        team_id=base_club.team_id,
+        category_id=base_club.category_id,
         generated_by_team_admin_id=generated_by_team_admin_id,
         generated_at=now,
         verified_at=datetime.utcnow(),
@@ -428,9 +437,9 @@ def create_match_day_squad(
         home_team_logo_snapshot=fixture.home_team.logo,
         away_team_name_snapshot=fixture.away_team.team_name,
         away_team_logo_snapshot=fixture.away_team.logo,
-        team_name_snapshot=team.team_name,
-        team_logo_snapshot=team.logo,
-        category_name_snapshot=team.category.category_name,
+        team_name_snapshot=base_club.team_name,
+        team_logo_snapshot=base_club.logo,
+        category_name_snapshot=base_club.category.category_name,
     )
     db.add(squad)
     db.flush()

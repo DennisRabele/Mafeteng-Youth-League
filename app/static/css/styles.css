@@ -1745,7 +1745,7 @@ body[data-app-mode="super_admin"] .fixture-builder-form .super-admin-category-se
   align-items: center;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr) minmax(90px, 0.6fr) minmax(110px, 0.6fr) minmax(90px, 0.5fr);
+  grid-template-columns: minmax(0, 2fr) minmax(150px, 1fr) minmax(120px, 0.9fr) minmax(90px, 0.6fr) minmax(110px, 0.6fr) minmax(90px, 0.5fr);
 }
 
 .matchday-squad-sheet__head {

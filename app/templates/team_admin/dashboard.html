@@ -1532,15 +1532,65 @@
               Squad team is selected automatically from the approved club involved in the chosen fixture.
             </div>
           </div>
+          <div class="matchday-preview" aria-live="polite">
+            <div class="matchday-preview__head">
+              <div class="matchday-preview__date">
+                <span>Fixture Date</span>
+                <strong data-matchday-fixture-date>Select a fixture</strong>
+              </div>
+              <div class="matchday-preview__meta">
+                <span data-matchday-fixture-venue>Venue will appear here</span>
+                <span data-matchday-fixture-time>Kickoff time will appear here</span>
+              </div>
+            </div>
+            <div class="matchday-preview__teams">
+              <div class="matchday-preview__team matchday-preview__team--home">
+                <span class="fixture-logo-frame" data-matchday-home-logo>
+                  <span class="fixture-logo fallback fixture-logo-frame">H</span>
+                </span>
+                <div>
+                  <span class="matchday-preview__label">Home Team</span>
+                  <strong data-matchday-home-name>Select a fixture</strong>
+                  <small data-matchday-home-note>Home team details will load here.</small>
+                </div>
+              </div>
+              <div class="matchday-preview__vs">VS</div>
+              <div class="matchday-preview__team matchday-preview__team--away" style="justify-content:flex-end; text-align:right;">
+                <div>
+                  <span class="matchday-preview__label">Away Team</span>
+                  <strong data-matchday-away-name>Select a fixture</strong>
+                  <small data-matchday-away-note>Away team details will load here.</small>
+                </div>
+                <span class="fixture-logo-frame" data-matchday-away-logo>
+                  <span class="fixture-logo fallback fixture-logo-frame">A</span>
+                </span>
+              </div>
+            </div>
+          </div>
           <div class="squad-builder">
             <div class="squad-builder__head">
-              <h3>Add Player</h3>
-              <span class="section-copy">Added players move into the squad list and cannot be selected again until removed.</span>
+              <h3>Select Club</h3>
+              <span class="section-copy">Only approved clubs appear here. Switch clubs to add players from another approved club into the same squad list.</span>
             </div>
             <div class="form-grid three">
+              <label>Club
+                <select id="match-day-club-select">
+                  <option value="">Select club</option>
+                  {% for team in approved_teams %}
+                    <option
+                      value="{{ team.team_id }}"
+                      data-club-name="{{ team.team_name }}"
+                      data-club-logo="{{ team.logo or '' }}"
+                      data-club-category="{{ team.category.category_name if team.category else '' }}"
+                    >
+                      {{ team.team_name }}{% if team.category %} - {{ team.category.category_name }}{% endif %}
+                    </option>
+                  {% endfor %}
+                </select>
+              </label>
               <label>Player Name
                 <select id="match-day-player-select" disabled>
-                  <option value="">Select fixture first</option>
+                  <option value="">Select club first</option>
                 </select>
               </label>
               <label>Jersey Number
@@ -1555,6 +1605,7 @@
           <div class="matchday-squad-sheet">
             <div class="matchday-squad-sheet__head">
               <span>Player</span>
+              <span>Club</span>
               <span>Player ID</span>
               <span>Age</span>
               <span>Jersey #</span>
@@ -1580,18 +1631,19 @@
               return;
             }
             const fixtureSelect = document.getElementById("match-day-fixture-select");
+            const clubSelect = document.getElementById("match-day-club-select");
             const playerSelect = document.getElementById("match-day-player-select");
             const jerseyInput = document.getElementById("match-day-jersey-input");
             const addButton = document.querySelector("[data-add-player]");
             const squadList = document.querySelector("[data-squad-list]");
             const matchDayError = document.querySelector("[data-match-day-error]");
-            const primaryTeamId = String(form.dataset.primaryTeamId || "").trim();
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
             const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
-            const approvedTeamIds = new Set(JSON.parse(document.getElementById("match-day-approved-team-ids")?.textContent || "[]").map((value) => String(value)));
             const selectedPlayerIds = new Set();
             let activeFixture = null;
+            let activeClub = null;
             let activeTeamId = null;
+            const primaryTeamId = "";
 
             const extractAgeGroup = (value) => {
               const match = String(value || "").toUpperCase().match(/\bU\d{2}\b/);
@@ -1650,45 +1702,51 @@
               setMatchDayError("");
             };
 
-            const resolveFixtureTeamId = (fixture) => {
-              if (!fixture) {
-                return null;
+            const renderTeamLogo = (container, teamName, logoUrl) => {
+              if (!container) {
+                return;
               }
-              const fixtureTeamIds = [fixture.home_team_id, fixture.away_team_id]
-                .map((value) => String(value || "").trim())
-                .filter(Boolean);
-              if (primaryTeamId && fixtureTeamIds.includes(primaryTeamId)) {
-                return primaryTeamId;
+              container.innerHTML = "";
+              if (logoUrl) {
+                const image = document.createElement("img");
+                image.className = "fixture-logo";
+                image.src = logoUrl;
+                image.alt = teamName || "Team logo";
+                container.appendChild(image);
+                return;
               }
-              const candidateTeamIds = [fixture.home_team_id, fixture.away_team_id]
-                .map((value) => String(value || "").trim())
-                .filter((value) => value && approvedTeamIds.has(value));
-              if (candidateTeamIds.length === 1) {
-                return candidateTeamIds[0];
-              }
-              if (candidateTeamIds.length === 0) {
-                setMatchDayError("team id not parsed from selected fixture.");
-                return null;
-              }
-              setMatchDayError("selected fixture matched more than one approved team.");
-              return null;
+              const fallback = document.createElement("span");
+              fallback.className = "fixture-logo fallback fixture-logo-frame";
+              fallback.textContent = String(teamName || "?").trim().slice(0, 1).toUpperCase() || "?";
+              container.appendChild(fallback);
             };
 
-            const clearSquadList = () => {
-              selectedPlayerIds.clear();
-              squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
-            };
-
-            const updateEmptyState = () => {
-              if (!squadList.querySelector("[data-squad-row]")) {
-                squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
-              }
+            const updateFixturePreview = (fixture) => {
+              const dateNode = document.querySelector("[data-matchday-fixture-date]");
+              const venueNode = document.querySelector("[data-matchday-fixture-venue]");
+              const timeNode = document.querySelector("[data-matchday-fixture-time]");
+              const homeNameNode = document.querySelector("[data-matchday-home-name]");
+              const awayNameNode = document.querySelector("[data-matchday-away-name]");
+              const homeNoteNode = document.querySelector("[data-matchday-home-note]");
+              const awayNoteNode = document.querySelector("[data-matchday-away-note]");
+              const homeLogoNode = document.querySelector("[data-matchday-home-logo]");
+              const awayLogoNode = document.querySelector("[data-matchday-away-logo]");
+              const homeTeamName = fixture?.home_team?.team_name || "Select a fixture";
+              const awayTeamName = fixture?.away_team?.team_name || "Select a fixture";
+              if (dateNode) dateNode.textContent = fixture?.fixture_date || "Select a fixture";
+              if (venueNode) venueNode.textContent = fixture?.venue || "Venue will appear here";
+              if (timeNode) timeNode.textContent = fixture?.dashboard_time || "Kickoff time will appear here";
+              if (homeNameNode) homeNameNode.textContent = homeTeamName;
+              if (awayNameNode) awayNameNode.textContent = awayTeamName;
+              if (homeNoteNode) homeNoteNode.textContent = fixture ? `Home team: ${homeTeamName}` : "Home team details will load here.";
+              if (awayNoteNode) awayNoteNode.textContent = fixture ? `Away team: ${awayTeamName}` : "Away team details will load here.";
+              renderTeamLogo(homeLogoNode, homeTeamName, fixture?.home_team?.logo || "");
+              renderTeamLogo(awayLogoNode, awayTeamName, fixture?.away_team?.logo || "");
             };
 
             const updateAddButtonState = () => {
               const canAdd = Boolean(
-                activeFixture &&
-                activeTeamId &&
+                activeClub &&
                 playerSelect.value &&
                 jerseyInput.value.trim()
               );
@@ -1817,6 +1875,268 @@
               if (!activeTeamId) {
                 event.preventDefault();
                 setMatchDayError("team id not parsed from selected fixture.");
+                return;
+              }
+              if (!squadList.querySelector("[data-squad-row]")) {
+                event.preventDefault();
+                setMatchDayError("Add at least one player to the squad list.");
+                return;
+              }
+            });
+          })();
+        </script>
+
+        <script>
+          (function () {
+            let form = document.querySelector("[data-match-day-squad-form]");
+            const replaceControl = (element) => {
+              if (!element) {
+                return null;
+              }
+              const clone = element.cloneNode(true);
+              element.replaceWith(clone);
+              return clone;
+            };
+
+            form = replaceControl(form);
+            if (!form) {
+              return;
+            }
+
+            const fixtureSelect = replaceControl(document.getElementById("match-day-fixture-select"));
+            const clubSelect = replaceControl(document.getElementById("match-day-club-select"));
+            const playerSelect = replaceControl(document.getElementById("match-day-player-select"));
+            const jerseyInput = replaceControl(document.getElementById("match-day-jersey-input"));
+            const addButton = replaceControl(document.querySelector("[data-add-player]"));
+            const squadList = document.querySelector("[data-squad-list]");
+            const matchDayError = document.querySelector("[data-match-day-error]");
+            const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
+            const playerData = JSON.parse(document.getElementById("match-day-player-data")?.textContent || "[]");
+            const selectedPlayerIds = new Set();
+            let activeFixture = null;
+            let activeClub = null;
+
+            const extractAgeGroup = (value) => {
+              const match = String(value || "").toUpperCase().match(/\bU\d{2}\b/);
+              return match ? match[0] : "";
+            };
+
+            const extractGender = (value) => {
+              const normalized = String(value || "").trim().toLowerCase();
+              if (normalized.startsWith("male")) return "male";
+              if (normalized.startsWith("female")) return "female";
+              return "";
+            };
+
+            const canPlayForCategory = (player, sourceCategory) => {
+              const targetAgeGroup = extractAgeGroup(sourceCategory);
+              const playerAgeGroup = extractAgeGroup(player.age_group);
+              const targetGender = extractGender(sourceCategory);
+              const playerGender = extractGender(player.category_name);
+              const allowedTargets = {
+                male: { U13: ["U13", "U15", "U17"], U15: ["U15", "U17"], U17: ["U17"] },
+                female: { U13: ["U13", "U15", "U17"], U15: ["U15", "U17", "U20"], U17: ["U17", "U20"], U20: ["U20"] },
+              };
+              return Boolean(
+                targetAgeGroup &&
+                playerAgeGroup &&
+                targetGender &&
+                playerGender &&
+                targetGender === playerGender &&
+                allowedTargets[playerGender]?.[playerAgeGroup]?.includes(targetAgeGroup)
+              );
+            };
+
+            const setMatchDayError = (message) => {
+              if (!matchDayError) return;
+              const text = String(message || "").trim();
+              matchDayError.textContent = text;
+              matchDayError.hidden = !text;
+            };
+
+            const clearMatchDayError = () => setMatchDayError("");
+
+            const renderTeamLogo = (container, teamName, logoUrl) => {
+              if (!container) return;
+              container.innerHTML = "";
+              if (logoUrl) {
+                const image = document.createElement("img");
+                image.className = "fixture-logo";
+                image.src = logoUrl;
+                image.alt = teamName || "Team logo";
+                container.appendChild(image);
+                return;
+              }
+              const fallback = document.createElement("span");
+              fallback.className = "fixture-logo fallback fixture-logo-frame";
+              fallback.textContent = String(teamName || "?").trim().slice(0, 1).toUpperCase() || "?";
+              container.appendChild(fallback);
+            };
+
+            const updateFixturePreview = (fixture) => {
+              const dateNode = document.querySelector("[data-matchday-fixture-date]");
+              const venueNode = document.querySelector("[data-matchday-fixture-venue]");
+              const timeNode = document.querySelector("[data-matchday-fixture-time]");
+              const homeNameNode = document.querySelector("[data-matchday-home-name]");
+              const awayNameNode = document.querySelector("[data-matchday-away-name]");
+              const homeNoteNode = document.querySelector("[data-matchday-home-note]");
+              const awayNoteNode = document.querySelector("[data-matchday-away-note]");
+              const homeLogoNode = document.querySelector("[data-matchday-home-logo]");
+              const awayLogoNode = document.querySelector("[data-matchday-away-logo]");
+              const homeTeamName = fixture?.home_team?.team_name || "Select a fixture";
+              const awayTeamName = fixture?.away_team?.team_name || "Select a fixture";
+              if (dateNode) dateNode.textContent = fixture?.fixture_date || "Select a fixture";
+              if (venueNode) venueNode.textContent = fixture?.venue || "Venue will appear here";
+              if (timeNode) timeNode.textContent = fixture?.dashboard_time || "Kickoff time will appear here";
+              if (homeNameNode) homeNameNode.textContent = homeTeamName;
+              if (awayNameNode) awayNameNode.textContent = awayTeamName;
+              if (homeNoteNode) homeNoteNode.textContent = fixture ? `Home team: ${homeTeamName}` : "Home team details will load here.";
+              if (awayNoteNode) awayNoteNode.textContent = fixture ? `Away team: ${awayTeamName}` : "Away team details will load here.";
+              renderTeamLogo(homeLogoNode, homeTeamName, fixture?.home_team?.logo || "");
+              renderTeamLogo(awayLogoNode, awayTeamName, fixture?.away_team?.logo || "");
+            };
+
+            const updateAddButtonState = () => {
+              const canAdd = Boolean(activeClub && playerSelect.value && jerseyInput.value.trim());
+              jerseyInput.required = Boolean(playerSelect.value);
+              addButton.disabled = !canAdd;
+            };
+
+            const refreshPlayerSelect = () => {
+              if (!activeClub) {
+                playerSelect.innerHTML = '<option value="">Select club first</option>';
+                playerSelect.disabled = true;
+                jerseyInput.disabled = true;
+                addButton.disabled = true;
+                return;
+              }
+              playerSelect.innerHTML = '<option value="">Select player</option>';
+              const selectedCategory = activeClub.dataset.clubCategory || "";
+              const eligiblePlayers = playerData.filter((player) => {
+                return String(player.team_id) === String(activeClub.value) &&
+                  canPlayForCategory(player, selectedCategory) &&
+                  !selectedPlayerIds.has(String(player.player_id));
+              });
+              eligiblePlayers.forEach((player) => {
+                const option = document.createElement("option");
+                option.value = player.player_id;
+                option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group}) - ${player.category_name}`;
+                option.dataset.playerCode = player.player_code;
+                option.dataset.ageGroup = player.age_group;
+                option.dataset.teamName = player.team_name;
+                playerSelect.appendChild(option);
+              });
+              playerSelect.disabled = false;
+              jerseyInput.disabled = false;
+              if (eligiblePlayers.length === 0) {
+                setMatchDayError("No eligible players found for the selected club.");
+              } else {
+                clearMatchDayError();
+              }
+              updateAddButtonState();
+            };
+
+            const addPlayerRow = () => {
+              const selectedClub = activeClub;
+              const playerId = playerSelect.value;
+              const selectedOption = playerSelect.selectedOptions[0];
+              const jerseyNumber = jerseyInput.value.trim();
+              const jerseyValue = Number(jerseyNumber);
+              const clubId = selectedClub?.value || "";
+              const clubName = selectedClub?.dataset.clubName || selectedClub?.textContent || "";
+              if (!clubId) {
+                setMatchDayError("Select a club before adding players.");
+                return;
+              }
+              if (!playerId || !selectedOption) {
+                setMatchDayError("Select a player from the dropdown before adding it.");
+                return;
+              }
+              if (!jerseyNumber || !Number.isInteger(jerseyValue) || jerseyValue < 1 || jerseyValue > 99) {
+                setMatchDayError("Enter a valid jersey number between 1 and 99.");
+                return;
+              }
+              if (selectedPlayerIds.has(playerId)) {
+                setMatchDayError("That player is already in the squad list.");
+                return;
+              }
+              const playerName = selectedOption.textContent;
+              const playerCode = selectedOption.dataset.playerCode || "";
+              const ageGroup = selectedOption.dataset.ageGroup || "";
+              if (squadList.querySelector(".matchday-squad-empty")) {
+                squadList.innerHTML = "";
+              }
+              const row = document.createElement("div");
+              row.className = "matchday-squad-row";
+              row.dataset.squadRow = "true";
+              row.dataset.playerId = playerId;
+              row.innerHTML = `
+                <span class="matchday-squad-cell matchday-squad-cell--name">${playerName}</span>
+                <span class="matchday-squad-cell">${clubName}</span>
+                <span class="matchday-squad-cell">${playerCode}</span>
+                <span class="matchday-squad-cell">${ageGroup}</span>
+                <label class="matchday-squad-cell matchday-squad-cell--jersey">
+                  <input name="jersey_numbers" type="number" min="1" max="99" value="${jerseyValue}" required>
+                </label>
+                <div class="matchday-squad-cell matchday-squad-cell--action">
+                  <button class="button button-muted small" type="button">Remove</button>
+                  <input type="hidden" name="club_ids" value="${clubId}">
+                  <input type="hidden" name="player_ids" value="${playerId}">
+                </div>
+              `;
+              row.querySelector("button")?.addEventListener("click", () => {
+                selectedPlayerIds.delete(playerId);
+                row.remove();
+                if (!squadList.querySelector("[data-squad-row]")) {
+                  squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
+                }
+                refreshPlayerSelect();
+              });
+              squadList.appendChild(row);
+              selectedPlayerIds.add(playerId);
+              playerSelect.value = "";
+              jerseyInput.value = "";
+              refreshPlayerSelect();
+              clearMatchDayError();
+            };
+
+            const syncClubSelection = () => {
+              activeClub = clubSelect?.selectedOptions?.[0] && clubSelect.value ? clubSelect.selectedOptions[0] : null;
+              refreshPlayerSelect();
+            };
+
+            const syncFixtureSelection = () => {
+              activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
+              updateFixturePreview(activeFixture);
+            };
+
+            fixtureSelect?.addEventListener("change", syncFixtureSelection);
+            clubSelect?.addEventListener("change", syncClubSelection);
+            addButton?.addEventListener("click", addPlayerRow);
+            playerSelect?.addEventListener("change", () => {
+              jerseyInput.required = Boolean(playerSelect.value);
+              if (playerSelect.value) {
+                jerseyInput.focus();
+              }
+              clearMatchDayError();
+              updateAddButtonState();
+            });
+            jerseyInput?.addEventListener("input", updateAddButtonState);
+            jerseyInput?.addEventListener("change", updateAddButtonState);
+
+            updateFixturePreview(null);
+            syncFixtureSelection();
+            syncClubSelection();
+
+            form.addEventListener("submit", (event) => {
+              if (!activeFixture) {
+                event.preventDefault();
+                setMatchDayError("Select a fixture before generating the squad.");
+                return;
+              }
+              if (!activeClub) {
+                event.preventDefault();
+                setMatchDayError("Select a club before generating the squad.");
                 return;
               }
               if (!squadList.querySelector("[data-squad-row]")) {

@@ -2023,6 +2023,7 @@ def export_team_admin_fixtures(
 def create_team_admin_match_day_squad(
     request: Request,
     fixture_id: str = Form(...),
+    club_ids: list[str] | None = Form(None),
     player_ids: list[str] | None = Form(None),
     jersey_numbers: list[str] | None = Form(None),
     db: Session = Depends(get_db),
@@ -2034,7 +2035,13 @@ def create_team_admin_match_day_squad(
         return _render(
             request,
             "team_admin/action_result.html",
-            {"error": "team id not parsed from selected fixture."},
+            {"error": "fixture id not parsed from selected fixture."},
+        )
+    if not club_ids:
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Select a club for each player in the squad."},
         )
     if not player_ids:
         return _render(
@@ -2048,6 +2055,28 @@ def create_team_admin_match_day_squad(
             "team_admin/action_result.html",
             {"error": "Enter jersey numbers for each selected player."},
         )
+    if len(club_ids) != len(player_ids):
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Each selected player must have a club assigned."},
+        )
+    if len(player_ids) != len(jersey_numbers):
+        return _render(
+            request,
+            "team_admin/action_result.html",
+            {"error": "Each selected player must have a jersey number."},
+        )
+    parsed_club_ids: list[int] = []
+    for index, value in enumerate(club_ids):
+        try:
+            parsed_club_ids.append(int(str(value).strip()))
+        except (TypeError, ValueError):
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": f"club id not parsed at squad row {index + 1}."},
+            )
     parsed_player_ids: list[int] = []
     for index, value in enumerate(player_ids):
         try:
@@ -2068,8 +2097,8 @@ def create_team_admin_match_day_squad(
                 "team_admin/action_result.html",
                 {"error": f"jersey number not parsed at squad row {index + 1}."},
             )
-    primary_team = load_team_admin_primary_team(db, team_admin.team_admin_id)
-    if not primary_team:
+    approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
+    if not approved_team_ids:
         return _render(
             request,
             "team_admin/action_result.html",
@@ -2090,17 +2119,11 @@ def create_team_admin_match_day_squad(
             "team_admin/action_result.html",
             {"error": "Selected fixture could not be found."},
         )
-    if primary_team.team_id not in {fixture.home_team_id, fixture.away_team_id}:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "Selected fixture does not include one of your approved clubs."},
-        )
     try:
         squad = create_match_day_squad(
             db,
             fixture_id=parsed_fixture_id,
-            team_id=primary_team.team_id,
+            club_ids=parsed_club_ids,
             generated_by_team_admin_id=team_admin.team_admin_id,
             player_ids=parsed_player_ids,
             jersey_numbers=parsed_jersey_numbers,
