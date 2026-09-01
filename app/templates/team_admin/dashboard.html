@@ -1699,7 +1699,7 @@
             const refreshPlayerSelect = () => {
               playerSelect.innerHTML = '<option value="">Select player</option>';
               const selectedFixture = activeFixture;
-              const selectedTeamId = activeTeamId;
+              const selectedTeamId = activeTeamId || primaryTeamId;
               const targetCategory = selectedFixture?.category_name || "";
               const eligiblePlayers = playerData.filter((player) => {
                 return selectedFixture &&
@@ -1721,10 +1721,8 @@
               playerSelect.disabled = !enabled;
               jerseyInput.disabled = !enabled;
               if (selectedFixture && !selectedTeamId) {
-                playerSelect.disabled = true;
-                jerseyInput.disabled = true;
-              }
-              if (selectedFixture && selectedTeamId && eligiblePlayers.length === 0) {
+                setMatchDayError("team id not parsed from selected fixture.");
+              } else if (selectedFixture && selectedTeamId && eligiblePlayers.length === 0) {
                 setMatchDayError("No eligible players found for the selected fixture.");
               } else if (selectedFixture && selectedTeamId) {
                 clearMatchDayError();
