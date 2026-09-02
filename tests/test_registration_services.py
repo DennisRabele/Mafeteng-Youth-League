@@ -1996,6 +1996,7 @@ def test_match_day_squad_submission_reports_unmatched_player_ids_by_row():
             club_ids=[str(club.team_id), str(club.team_id)],
             player_ids=[str(player.player_id), "99999999"],
             jersey_numbers=["7", "8"],
+            squad_rows_json=None,
             db=db,
         )
 

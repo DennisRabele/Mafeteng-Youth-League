@@ -1578,6 +1578,8 @@
             </div>
           </div>
 
+          <input type="hidden" name="squad_rows_json" id="match-day-squad-rows-json" value="[]">
+
           <div class="form-actions wide">
             <button class="button button-success" type="submit">Generate Match Day Squad</button>
           </div>
@@ -1605,6 +1607,7 @@
             let activeFixture = null;
             let activeClub = null;
             let playerRequestToken = 0;
+            const squadPayloadInput = document.getElementById("match-day-squad-rows-json");
             let activeTeamId = null;
             const primaryTeamId = "";
 
@@ -1879,9 +1882,22 @@
 
             const clearMatchDayError = () => setMatchDayError("");
 
+            const syncSquadPayload = () => {
+              if (!squadPayloadInput) {
+                return;
+              }
+              const rows = Array.from(squadList.querySelectorAll("[data-squad-row]")).map((row) => ({
+                club_id: row.querySelector('input[name="club_ids"]')?.value || "",
+                player_id: row.querySelector('input[name="player_ids"]')?.value || row.dataset.playerId || "",
+                jersey_number: row.querySelector('input[name="jersey_numbers"]')?.value || "",
+              }));
+              squadPayloadInput.value = JSON.stringify(rows);
+            };
+
             const clearSquadList = () => {
               selectedPlayerIds.clear();
               squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
+              syncSquadPayload();
             };
 
             const updateAddButtonState = () => {
@@ -1930,13 +1946,13 @@
                 const players = Array.isArray(payload.players) ? payload.players : [];
                 const eligiblePlayers = players.filter((player) => !selectedPlayerIds.has(String(player.player_id)));
                 if (eligiblePlayers.length === 0) {
-                  playerSelect.innerHTML = '<option value="">No eligible players</option>';
+                  playerSelect.innerHTML = '<option value="">All approved players from this club are already in the squad list</option>';
                   playerSelect.disabled = true;
                   jerseyInput.disabled = true;
                   if (addButton) {
                     addButton.disabled = true;
                   }
-                  setMatchDayError(`No approved players were returned for ${payload.club_name || "the selected club"}.`);
+                  clearMatchDayError();
                   return;
                 }
                 playerSelect.innerHTML = '<option value="">Select player</option>';
@@ -2015,12 +2031,14 @@
                 if (!squadList.querySelector("[data-squad-row]")) {
                   squadList.innerHTML = '<div class="matchday-squad-empty">No players added yet.</div>';
                 }
+                syncSquadPayload();
                 refreshPlayerSelect();
               });
               squadList.appendChild(row);
               selectedPlayerIds.add(playerId);
               playerSelect.value = "";
               jerseyInput.value = "";
+              syncSquadPayload();
               refreshPlayerSelect();
               clearMatchDayError();
             };
@@ -2066,6 +2084,7 @@
                 setMatchDayError("Add at least one player to the squad list.");
                 return;
               }
+              syncSquadPayload();
             });
           })();
         </script>

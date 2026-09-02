@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, timedelta
 import logging
 import re
@@ -2025,6 +2026,7 @@ def create_team_admin_match_day_squad(
     club_ids: list[str] | None = Form(None),
     player_ids: list[str] | None = Form(None),
     jersey_numbers: list[str] | None = Form(None),
+    squad_rows_json: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
@@ -2036,66 +2038,113 @@ def create_team_admin_match_day_squad(
             "team_admin/action_result.html",
             {"error": "fixture id not parsed from selected fixture."},
         )
-    if not club_ids:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "club id not parsed from squad list."},
-        )
-    if not player_ids:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "player id not parsed from squad list."},
-        )
-    if not jersey_numbers:
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "jersey number not parsed from squad list."},
-        )
-    if len(club_ids) != len(player_ids):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "club id not parsed for every squad row."},
-        )
-    if len(player_ids) != len(jersey_numbers):
-        return _render(
-            request,
-            "team_admin/action_result.html",
-            {"error": "jersey number not parsed for every squad row."},
-        )
     parsed_club_ids: list[int] = []
-    for index, value in enumerate(club_ids):
-        try:
-            parsed_club_ids.append(int(str(value).strip()))
-        except (TypeError, ValueError):
-            return _render(
-                request,
-                "team_admin/action_result.html",
-                {"error": f"club id not parsed at squad row {index + 1}."},
-            )
     parsed_player_ids: list[int] = []
-    for index, value in enumerate(player_ids):
-        try:
-            parsed_player_ids.append(int(str(value).strip()))
-        except (TypeError, ValueError):
-            return _render(
-                request,
-                "team_admin/action_result.html",
-                {"error": f"player id not parsed at squad row {index + 1}."},
-            )
     parsed_jersey_numbers: list[int] = []
-    for index, value in enumerate(jersey_numbers):
+    if squad_rows_json:
         try:
-            parsed_jersey_numbers.append(int(str(value).strip()))
-        except (TypeError, ValueError):
+            squad_rows = json.loads(squad_rows_json)
+        except json.JSONDecodeError:
             return _render(
                 request,
                 "team_admin/action_result.html",
-                {"error": f"jersey number not parsed at squad row {index + 1}."},
+                {"error": "squad row payload could not be parsed."},
             )
+        if not isinstance(squad_rows, list) or not squad_rows:
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": "Add at least one squad row before generating the list."},
+            )
+        for index, row in enumerate(squad_rows):
+            if not isinstance(row, dict):
+                return _render(
+                    request,
+                    "team_admin/action_result.html",
+                    {"error": f"squad row payload could not be parsed at row {index + 1}."},
+                )
+            try:
+                parsed_club_ids.append(int(str(row.get("club_id", "")).strip()))
+            except (TypeError, ValueError):
+                return _render(
+                    request,
+                    "team_admin/action_result.html",
+                    {"error": f"club id not parsed at squad row {index + 1}."},
+                )
+            try:
+                parsed_player_ids.append(int(str(row.get("player_id", "")).strip()))
+            except (TypeError, ValueError):
+                return _render(
+                    request,
+                    "team_admin/action_result.html",
+                    {"error": f"player id not parsed at squad row {index + 1}."},
+                )
+            try:
+                parsed_jersey_numbers.append(int(str(row.get("jersey_number", "")).strip()))
+            except (TypeError, ValueError):
+                return _render(
+                    request,
+                    "team_admin/action_result.html",
+                    {"error": f"jersey number not parsed at squad row {index + 1}."},
+                )
+    else:
+        if not club_ids:
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": "club id not parsed from squad list."},
+            )
+        if not player_ids:
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": "player id not parsed from squad list."},
+            )
+        if not jersey_numbers:
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": "jersey number not parsed from squad list."},
+            )
+        if len(club_ids) != len(player_ids):
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": "club id not parsed for every squad row."},
+            )
+        if len(player_ids) != len(jersey_numbers):
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": "jersey number not parsed for every squad row."},
+            )
+        for index, value in enumerate(club_ids):
+            try:
+                parsed_club_ids.append(int(str(value).strip()))
+            except (TypeError, ValueError):
+                return _render(
+                    request,
+                    "team_admin/action_result.html",
+                    {"error": f"club id not parsed at squad row {index + 1}."},
+                )
+        for index, value in enumerate(player_ids):
+            try:
+                parsed_player_ids.append(int(str(value).strip()))
+            except (TypeError, ValueError):
+                return _render(
+                    request,
+                    "team_admin/action_result.html",
+                    {"error": f"player id not parsed at squad row {index + 1}."},
+                )
+        for index, value in enumerate(jersey_numbers):
+            try:
+                parsed_jersey_numbers.append(int(str(value).strip()))
+            except (TypeError, ValueError):
+                return _render(
+                    request,
+                    "team_admin/action_result.html",
+                    {"error": f"jersey number not parsed at squad row {index + 1}."},
+                )
     approved_team_ids = load_team_admin_approved_team_ids(db, team_admin.team_admin_id)
     if not approved_team_ids:
         return _render(
