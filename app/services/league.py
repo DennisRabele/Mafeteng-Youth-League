@@ -349,7 +349,7 @@ def create_match_day_squad(
     fixture_id: int,
     club_ids: list[int],
     generated_by_team_admin_id: int,
-    player_ids: list[int],
+    player_ids: list[int | str],
     jersey_numbers: list[int],
 ) -> MatchDaySquad:
     if not _has_table(db, "match_day_squads"):
@@ -395,21 +395,16 @@ def create_match_day_squad(
         if not _category_age_group(club.category.category_name):
             raise RegistrationError(f"{club.team_name} category is not eligible for match day squads.")
 
-    players = db.scalars(
-        select(Player)
-        .options(selectinload(Player.team).selectinload(Team.category))
-        .where(Player.player_id.in_(player_ids))
-    ).all()
-    player_map = {player.player_id: player for player in players}
-    if len(player_map) != len(player_ids):
-        for index, player_id in enumerate(player_ids):
-            if player_id not in player_map:
-                raise RegistrationError(f"player id not matched/parsed at squad row {index + 1}.")
-        raise RegistrationError("player id not matched/parsed in squad list.")
+    player_map = _player_lookup_map(db, player_ids)
+    resolved_players: list[Player] = []
+    for index, player_id in enumerate(player_ids):
+        player = player_map.get(_selected_player_lookup_key(player_id))
+        if not player:
+            raise RegistrationError(f"player id not matched/parsed at squad row {index + 1}.")
+        resolved_players.append(player)
 
     eligible_players: list[Player] = []
-    for index, (player_id, club_id) in enumerate(zip(player_ids, club_ids, strict=True)):
-        player = player_map[player_id]
+    for index, (player, club_id) in enumerate(zip(resolved_players, club_ids, strict=True)):
         club = club_map.get(club_id)
         if not club or not club.category:
             raise RegistrationError(f"Selected club at row {index + 1} could not be found.")
@@ -805,7 +800,10 @@ def _selected_player_lookup_key(value: int | str | None) -> int | str | None:
         return None
     if isinstance(value, int):
         return value
-    return " ".join(str(value).split()).casefold()
+    text_value = " ".join(str(value).split())
+    if text_value.isdigit():
+        return int(text_value)
+    return text_value.casefold()
 
 
 def _player_lookup_map(
@@ -816,8 +814,14 @@ def _player_lookup_map(
 ) -> dict[int | str, Player]:
     if not player_ids:
         return {}
-    numeric_ids = [player_id for player_id in player_ids if isinstance(player_id, int)]
-    text_values = [str(player_id).strip() for player_id in player_ids if isinstance(player_id, str) and str(player_id).strip()]
+    numeric_ids: list[int] = []
+    text_values: list[str] = []
+    for player_id in player_ids:
+        lookup_key = _selected_player_lookup_key(player_id)
+        if isinstance(lookup_key, int):
+            numeric_ids.append(lookup_key)
+        elif isinstance(lookup_key, str) and lookup_key.strip():
+            text_values.append(lookup_key)
     players_by_key: dict[int | str, Player] = {}
 
     if numeric_ids:

@@ -2039,7 +2039,7 @@ def create_team_admin_match_day_squad(
             {"error": "fixture id not parsed from selected fixture."},
         )
     parsed_club_ids: list[int] = []
-    parsed_player_ids: list[int] = []
+    parsed_player_ids: list[int | str] = []
     parsed_jersey_numbers: list[int] = []
     repeated_fields_present = bool(club_ids or player_ids or jersey_numbers)
     parsed_squad_rows: list[dict[str, str]] | None = None
@@ -2066,14 +2066,14 @@ def create_team_admin_match_day_squad(
                     "team_admin/action_result.html",
                     {"error": f"club id not parsed at squad row {index + 1}."},
                 )
-            try:
-                parsed_player_ids.append(int(str(row.get("player_id", "")).strip()))
-            except (TypeError, ValueError):
+            player_value = str(row.get("player_id", "")).strip()
+            if not player_value:
                 return _render(
                     request,
                     "team_admin/action_result.html",
                     {"error": f"player id not parsed at squad row {index + 1}."},
                 )
+            parsed_player_ids.append(player_value)
             try:
                 parsed_jersey_numbers.append(int(str(row.get("jersey_number", "")).strip()))
             except (TypeError, ValueError):
@@ -2129,14 +2129,14 @@ def create_team_admin_match_day_squad(
                     {"error": f"club id not parsed at squad row {index + 1}."},
                 )
         for index, value in enumerate(player_ids):
-            try:
-                parsed_player_ids.append(int(str(value).strip()))
-            except (TypeError, ValueError):
+            player_value = str(value).strip()
+            if not player_value:
                 return _render(
                     request,
                     "team_admin/action_result.html",
                     {"error": f"player id not parsed at squad row {index + 1}."},
                 )
+            parsed_player_ids.append(player_value)
         for index, value in enumerate(jersey_numbers):
             try:
                 parsed_jersey_numbers.append(int(str(value).strip()))

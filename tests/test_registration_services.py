@@ -2116,6 +2116,117 @@ def test_match_day_squad_submission_accepts_squad_rows_json_payload():
     assert "/team-admin/dashboard/match-day-squads/" in response.headers["location"]
 
 
+def test_match_day_squad_submission_accepts_player_code_in_squad_rows_json_payload():
+    db = make_session()
+    season = Season(
+        season_name="2026 Squad Code Season",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+    )
+    db.add(season)
+    db.flush()
+    category = Category(season_id=season.season_id, category_name="Male U17")
+    db.add(category)
+    db.commit()
+
+    team_admin = create_team_admin_registration(
+        db,
+        full_name="Code Admin",
+        team_name="Code Makers",
+        email="code@example.test",
+        password="Password123",
+        national_id="NID-CODE",
+        phone="+26654440016",
+        photo_path="/uploads/admin-photos/code.png",
+    )
+    team_admin = approve_team_admin(db, team_admin.team_admin_id)
+
+    club = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=team_admin.team_admin_id,
+            team_name="Code Club",
+            category_id=category.category_id,
+            contact_information="+26654440017",
+            team_address="Code Road",
+            training_ground="Code Training",
+            home_ground="Code Ground",
+            logo="/uploads/team-logos/code-club.png",
+        ).team_id,
+    )
+
+    player = approve_player(
+        db,
+        register_player(
+            db,
+            team_id=club.team_id,
+            full_name="Code Player",
+            gender="Male",
+            dob=years_ago(17),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            parent_name="Code Parent",
+            parent_contact="+26654440018",
+            school_name=None,
+            position="Forward",
+            agreement_form_path="/uploads/player-agreements/code-player.pdf",
+            photo_path=None,
+            documents=[],
+            registration_period=1,
+        ).player_id,
+    )
+
+    fixture = Fixture(
+        season_id=season.season_id,
+        category_id=category.category_id,
+        home_team_id=club.team_id,
+        away_team_id=club.team_id,
+        fixture_date=datetime.utcnow() - timedelta(days=1),
+        venue="Code Venue",
+        status="completed",
+    )
+    fixture.away_team_id = fixture.home_team_id
+    db.add(fixture)
+    db.flush()
+    db.add(
+        Match(
+            fixture_id=fixture.fixture_id,
+            match_date=fixture.fixture_date,
+            status="completed",
+            home_score=0,
+            away_score=0,
+        )
+    )
+    db.commit()
+
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(app_mode="team_admin")))
+    payload = json.dumps(
+        [
+            {
+                "club_id": str(club.team_id),
+                "player_id": player.player_code,
+                "jersey_number": "9",
+            }
+        ]
+    )
+
+    with patch.object(routes, "_require_team_admin", return_value=team_admin):
+        response = routes.create_team_admin_match_day_squad(
+            request=request,
+            fixture_id=str(fixture.fixture_id),
+            club_ids=None,
+            player_ids=None,
+            jersey_numbers=None,
+            squad_rows_json=payload,
+            db=db,
+        )
+
+    assert response.status_code == 303
+    assert "/team-admin/dashboard/match-day-squads/" in response.headers["location"]
+
+
 def test_match_day_squad_submission_falls_back_to_row_fields_when_json_is_empty():
     db = make_session()
     season = Season(
