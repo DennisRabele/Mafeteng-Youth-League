@@ -2119,20 +2119,6 @@ def create_team_admin_match_day_squad(
             {"error": "Selected fixture could not be found."},
         )
 
-    found_player_ids = set(
-        db.scalars(
-            select(Player.player_id).where(Player.player_id.in_(parsed_player_ids))
-        ).all()
-    )
-    if len(found_player_ids) != len(parsed_player_ids):
-        for index, player_id in enumerate(parsed_player_ids):
-            if player_id not in found_player_ids:
-                return _render(
-                    request,
-                    "team_admin/action_result.html",
-                    {"error": f"player id not matched/parsed at squad row {index + 1}."},
-                )
-
     try:
         squad = create_match_day_squad(
             db,

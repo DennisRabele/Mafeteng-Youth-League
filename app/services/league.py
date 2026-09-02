@@ -402,7 +402,10 @@ def create_match_day_squad(
     ).all()
     player_map = {player.player_id: player for player in players}
     if len(player_map) != len(player_ids):
-        raise RegistrationError("One or more selected players could not be found.")
+        for index, player_id in enumerate(player_ids):
+            if player_id not in player_map:
+                raise RegistrationError(f"player id not matched/parsed at squad row {index + 1}.")
+        raise RegistrationError("player id not matched/parsed in squad list.")
 
     eligible_players: list[Player] = []
     for index, (player_id, club_id) in enumerate(zip(player_ids, club_ids, strict=True)):
