@@ -1949,7 +1949,7 @@
                   return;
                 }
                 const players = Array.isArray(payload.players) ? payload.players : [];
-                const eligiblePlayers = players.filter((player) => !selectedPlayerIds.has(String(player.player_id)));
+                const eligiblePlayers = players.filter((player) => !selectedPlayerIds.has(String(player.player_code || player.player_id)));
                 if (eligiblePlayers.length === 0) {
                   playerSelect.innerHTML = '<option value="">No more players to select</option>';
                   playerSelect.disabled = true;
@@ -1963,9 +1963,10 @@
                 playerSelect.innerHTML = '<option value="">Select player</option>';
                 eligiblePlayers.forEach((player) => {
                   const option = document.createElement("option");
-                  option.value = player.player_id;
+                  option.value = player.player_code || String(player.player_id);
                   option.textContent = `${player.full_name} - ${player.player_code} (${player.age_group}) - ${player.category_name}`;
                   option.dataset.playerCode = player.player_code;
+                  option.dataset.playerId = String(player.player_id);
                   option.dataset.ageGroup = player.age_group;
                   option.dataset.teamName = player.team_name;
                   playerSelect.appendChild(option);
@@ -1984,8 +1985,8 @@
             };
 
             const addPlayerRow = () => {
-              const playerId = playerSelect.value;
               const selectedOption = playerSelect.selectedOptions[0];
+              const playerId = selectedOption?.dataset.playerCode || playerSelect.value;
               const jerseyNumber = jerseyInput.value.trim();
               const jerseyValue = Number(jerseyNumber);
               const clubId = activeClub?.value || "";
