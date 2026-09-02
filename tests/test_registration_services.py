@@ -1897,6 +1897,112 @@ def test_match_day_squad_generation_uses_selected_clubs_without_fixture_category
     assert [member.jersey_number for member in loaded_squad.members] == [4, 8]
 
 
+def test_match_day_squad_submission_reports_unmatched_player_ids_by_row():
+    db = make_session()
+    season = Season(
+        season_name="2026 Squad Route Season",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+    )
+    db.add(season)
+    db.flush()
+    category = Category(season_id=season.season_id, category_name="Male U17")
+    db.add(category)
+    db.commit()
+
+    team_admin = create_team_admin_registration(
+        db,
+        full_name="Route Admin",
+        team_name="Route Makers",
+        email="route@example.test",
+        password="Password123",
+        national_id="NID-ROUTE",
+        phone="+26654440000",
+        photo_path="/uploads/admin-photos/route.png",
+    )
+    team_admin = approve_team_admin(db, team_admin.team_admin_id)
+
+    club = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=team_admin.team_admin_id,
+            team_name="Route Club",
+            category_id=category.category_id,
+            contact_information="+26654440001",
+            team_address="Route Road",
+            training_ground="Route Training",
+            home_ground="Route Ground",
+            logo="/uploads/team-logos/route-club.png",
+        ).team_id,
+    )
+
+    player = approve_player(
+        db,
+        register_player(
+            db,
+            team_id=club.team_id,
+            full_name="Route Player",
+            gender="Male",
+            dob=years_ago(17),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            parent_name="Route Parent",
+            parent_contact="+26654440002",
+            school_name=None,
+            position="Forward",
+            agreement_form_path="/uploads/player-agreements/route-player.pdf",
+            photo_path=None,
+            documents=[],
+            registration_period=1,
+        ).player_id,
+    )
+
+    fixture = Fixture(
+        season_id=season.season_id,
+        category_id=category.category_id,
+        home_team_id=club.team_id,
+        away_team_id=club.team_id,
+        fixture_date=datetime.utcnow() - timedelta(days=1),
+        venue="Route Venue",
+        status="completed",
+    )
+    fixture.away_team_id = fixture.home_team_id
+    db.add(fixture)
+    db.flush()
+    db.add(
+        Match(
+            fixture_id=fixture.fixture_id,
+            match_date=fixture.fixture_date,
+            status="completed",
+            home_score=0,
+            away_score=0,
+        )
+    )
+    db.commit()
+
+    request = SimpleNamespace()
+    with patch.object(routes, "_require_team_admin", return_value=team_admin), patch.object(
+        routes,
+        "_render",
+        side_effect=lambda request, template, context: SimpleNamespace(
+            body=str(context.get("error", "")).encode("utf-8")
+        ),
+    ):
+        response = routes.create_team_admin_match_day_squad(
+            request=request,
+            fixture_id=str(fixture.fixture_id),
+            club_ids=[str(club.team_id), str(club.team_id)],
+            player_ids=[str(player.player_id), "99999999"],
+            jersey_numbers=["7", "8"],
+            db=db,
+        )
+
+    body = response.body.decode("utf-8", errors="ignore")
+    assert "player id not matched/parsed at squad row 2." in body
+
+
 def test_rejection_reasons_are_required_and_saved():
     db = make_session()
     category = seed_category(db)
