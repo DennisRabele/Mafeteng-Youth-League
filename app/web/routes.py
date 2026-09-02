@@ -2051,8 +2051,21 @@ def create_team_admin_match_day_squad(
         if isinstance(loaded_squad_rows, list) and loaded_squad_rows:
             parsed_squad_rows = loaded_squad_rows
     if parsed_squad_rows is not None:
+        logger.info(
+            "match_day_squad_submission_json_received team_admin_id=%s fixture_id=%s raw_rows=%s",
+            team_admin.team_admin_id,
+            parsed_fixture_id,
+            parsed_squad_rows,
+        )
         for index, row in enumerate(parsed_squad_rows):
             if not isinstance(row, dict):
+                logger.warning(
+                    "match_day_squad_row_payload_invalid team_admin_id=%s fixture_id=%s row_index=%s row=%s",
+                    team_admin.team_admin_id,
+                    parsed_fixture_id,
+                    index + 1,
+                    row,
+                )
                 return _render(
                     request,
                     "team_admin/action_result.html",
@@ -2068,6 +2081,13 @@ def create_team_admin_match_day_squad(
                 )
             player_value = str(row.get("player_id", "")).strip()
             if not player_value:
+                logger.warning(
+                    "match_day_squad_player_id_missing team_admin_id=%s fixture_id=%s row_index=%s row=%s",
+                    team_admin.team_admin_id,
+                    parsed_fixture_id,
+                    index + 1,
+                    row,
+                )
                 return _render(
                     request,
                     "team_admin/action_result.html",
@@ -2077,6 +2097,13 @@ def create_team_admin_match_day_squad(
             try:
                 parsed_jersey_numbers.append(int(str(row.get("jersey_number", "")).strip()))
             except (TypeError, ValueError):
+                logger.warning(
+                    "match_day_squad_jersey_parse_failed team_admin_id=%s fixture_id=%s row_index=%s row=%s",
+                    team_admin.team_admin_id,
+                    parsed_fixture_id,
+                    index + 1,
+                    row,
+                )
                 return _render(
                     request,
                     "team_admin/action_result.html",
@@ -2153,6 +2180,14 @@ def create_team_admin_match_day_squad(
             "team_admin/action_result.html",
             {"error": "You need an approved club before generating a squad."},
         )
+    logger.info(
+        "match_day_squad_submission_parsed team_admin_id=%s fixture_id=%s club_ids=%s player_ids=%s jersey_numbers=%s",
+        team_admin.team_admin_id,
+        parsed_fixture_id,
+        parsed_club_ids,
+        parsed_player_ids,
+        parsed_jersey_numbers,
+    )
     fixture = db.scalar(
         select(Fixture)
         .options(

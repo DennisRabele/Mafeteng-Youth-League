@@ -398,8 +398,17 @@ def create_match_day_squad(
     player_map = _player_lookup_map(db, player_ids)
     resolved_players: list[Player] = []
     for index, player_id in enumerate(player_ids):
-        player = player_map.get(_selected_player_lookup_key(player_id))
+        lookup_key = _selected_player_lookup_key(player_id)
+        player = player_map.get(lookup_key)
         if not player:
+            logger.warning(
+                "match_day_squad_player_lookup_failed fixture_id=%s row_index=%s submitted_value=%s lookup_key=%s available_keys=%s",
+                fixture_id,
+                index + 1,
+                player_id,
+                lookup_key,
+                list(player_map.keys()),
+            )
             raise RegistrationError(f"player id not matched/parsed at squad row {index + 1}.")
         resolved_players.append(player)
 
