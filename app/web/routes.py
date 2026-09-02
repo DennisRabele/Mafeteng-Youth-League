@@ -2041,22 +2041,17 @@ def create_team_admin_match_day_squad(
     parsed_club_ids: list[int] = []
     parsed_player_ids: list[int] = []
     parsed_jersey_numbers: list[int] = []
+    repeated_fields_present = bool(club_ids or player_ids or jersey_numbers)
+    parsed_squad_rows: list[dict[str, str]] | None = None
     if squad_rows_json:
         try:
-            squad_rows = json.loads(squad_rows_json)
+            loaded_squad_rows = json.loads(squad_rows_json)
         except json.JSONDecodeError:
-            return _render(
-                request,
-                "team_admin/action_result.html",
-                {"error": "squad row payload could not be parsed."},
-            )
-        if not isinstance(squad_rows, list) or not squad_rows:
-            return _render(
-                request,
-                "team_admin/action_result.html",
-                {"error": "Add at least one squad row before generating the list."},
-            )
-        for index, row in enumerate(squad_rows):
+            loaded_squad_rows = None
+        if isinstance(loaded_squad_rows, list) and loaded_squad_rows:
+            parsed_squad_rows = loaded_squad_rows
+    if parsed_squad_rows is not None:
+        for index, row in enumerate(parsed_squad_rows):
             if not isinstance(row, dict):
                 return _render(
                     request,
@@ -2088,6 +2083,12 @@ def create_team_admin_match_day_squad(
                     {"error": f"jersey number not parsed at squad row {index + 1}."},
                 )
     else:
+        if not repeated_fields_present:
+            return _render(
+                request,
+                "team_admin/action_result.html",
+                {"error": "Add at least one squad row before generating the list."},
+            )
         if not club_ids:
             return _render(
                 request,

@@ -1603,7 +1603,7 @@
             const matchDayError = document.querySelector("[data-match-day-error]");
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
             const matchDayPlayerApi = "/api/team-admin/match-day-squad-players";
-            const squadPayloadInput = document.getElementById("match-day-squad-rows-json");
+            const squadPayloadInputLegacy = document.getElementById("match-day-squad-rows-json");
             const selectedPlayerIds = new Set();
             let activeFixture = null;
             let activeClub = null;
@@ -1884,16 +1884,19 @@
 
             const clearMatchDayError = () => setMatchDayError("");
 
-            const syncSquadPayload = () => {
-              if (!squadPayloadInput) {
-                return;
-              }
-              const rows = Array.from(squadList.querySelectorAll("[data-squad-row]")).map((row) => ({
+            const serializeSquadRows = () => {
+              return Array.from(squadList.querySelectorAll("[data-squad-row]")).map((row) => ({
                 club_id: row.querySelector('input[name="club_ids"]')?.value || "",
                 player_id: row.querySelector('input[name="player_ids"]')?.value || row.dataset.playerId || "",
                 jersey_number: row.querySelector('input[name="jersey_numbers"]')?.value || "",
               }));
-              squadPayloadInput.value = JSON.stringify(rows);
+            };
+
+            const syncSquadPayload = () => {
+              if (!squadPayloadInput) {
+                return;
+              }
+              squadPayloadInput.value = JSON.stringify(serializeSquadRows());
             };
 
             const clearSquadList = () => {
@@ -1948,7 +1951,7 @@
                 const players = Array.isArray(payload.players) ? payload.players : [];
                 const eligiblePlayers = players.filter((player) => !selectedPlayerIds.has(String(player.player_id)));
                 if (eligiblePlayers.length === 0) {
-                  playerSelect.innerHTML = '<option value="">All approved players from this club are already in the squad list</option>';
+                  playerSelect.innerHTML = '<option value="">No more players to select</option>';
                   playerSelect.disabled = true;
                   jerseyInput.disabled = true;
                   if (addButton) {
@@ -2084,7 +2087,7 @@
                 return;
               }
               syncSquadPayload();
-              if (!squadList.querySelector("[data-squad-row]")) {
+              if (!serializeSquadRows().length) {
                 event.preventDefault();
                 setMatchDayError("Add at least one player to the squad list.");
                 return;

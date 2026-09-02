@@ -2116,6 +2116,108 @@ def test_match_day_squad_submission_accepts_squad_rows_json_payload():
     assert "/team-admin/dashboard/match-day-squads/" in response.headers["location"]
 
 
+def test_match_day_squad_submission_falls_back_to_row_fields_when_json_is_empty():
+    db = make_session()
+    season = Season(
+        season_name="2026 Squad Fallback Season",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+    )
+    db.add(season)
+    db.flush()
+    category = Category(season_id=season.season_id, category_name="Male U17")
+    db.add(category)
+    db.commit()
+
+    team_admin = create_team_admin_registration(
+        db,
+        full_name="Fallback Admin",
+        team_name="Fallback Makers",
+        email="fallback@example.test",
+        password="Password123",
+        national_id="NID-FALLBACK",
+        phone="+26654440013",
+        photo_path="/uploads/admin-photos/fallback.png",
+    )
+    team_admin = approve_team_admin(db, team_admin.team_admin_id)
+
+    club = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=team_admin.team_admin_id,
+            team_name="Fallback Club",
+            category_id=category.category_id,
+            contact_information="+26654440014",
+            team_address="Fallback Road",
+            training_ground="Fallback Training",
+            home_ground="Fallback Ground",
+            logo="/uploads/team-logos/fallback-club.png",
+        ).team_id,
+    )
+
+    player = approve_player(
+        db,
+        register_player(
+            db,
+            team_id=club.team_id,
+            full_name="Fallback Player",
+            gender="Male",
+            dob=years_ago(17),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            parent_name="Fallback Parent",
+            parent_contact="+26654440015",
+            school_name=None,
+            position="Forward",
+            agreement_form_path="/uploads/player-agreements/fallback-player.pdf",
+            photo_path=None,
+            documents=[],
+            registration_period=1,
+        ).player_id,
+    )
+
+    fixture = Fixture(
+        season_id=season.season_id,
+        category_id=category.category_id,
+        home_team_id=club.team_id,
+        away_team_id=club.team_id,
+        fixture_date=datetime.utcnow() - timedelta(days=1),
+        venue="Fallback Venue",
+        status="completed",
+    )
+    fixture.away_team_id = fixture.home_team_id
+    db.add(fixture)
+    db.flush()
+    db.add(
+        Match(
+            fixture_id=fixture.fixture_id,
+            match_date=fixture.fixture_date,
+            status="completed",
+            home_score=0,
+            away_score=0,
+        )
+    )
+    db.commit()
+
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(app_mode="team_admin")))
+
+    with patch.object(routes, "_require_team_admin", return_value=team_admin):
+        response = routes.create_team_admin_match_day_squad(
+            request=request,
+            fixture_id=str(fixture.fixture_id),
+            club_ids=[str(club.team_id)],
+            player_ids=[str(player.player_id)],
+            jersey_numbers=["9"],
+            squad_rows_json="[]",
+            db=db,
+        )
+
+    assert response.status_code == 303
+    assert "/team-admin/dashboard/match-day-squads/" in response.headers["location"]
+
+
 def test_rejection_reasons_are_required_and_saved():
     db = make_session()
     category = seed_category(db)
