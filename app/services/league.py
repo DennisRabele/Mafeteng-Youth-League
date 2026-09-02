@@ -401,15 +401,16 @@ def create_match_day_squad(
         lookup_key = _selected_player_lookup_key(player_id)
         player = player_map.get(lookup_key)
         if not player:
-            logger.warning(
-                "match_day_squad_player_lookup_failed fixture_id=%s row_index=%s submitted_value=%s lookup_key=%s available_keys=%s",
-                fixture_id,
-                index + 1,
-                player_id,
-                lookup_key,
-                list(player_map.keys()),
+            submitted_value = "" if player_id is None else str(player_id).strip()
+            if not submitted_value:
+                raise RegistrationError(f"player id not parsed at squad row {index + 1}.")
+            if isinstance(lookup_key, int):
+                lookup_label = f"numeric id {lookup_key}"
+            else:
+                lookup_label = f"text value '{lookup_key}'"
+            raise RegistrationError(
+                f"player id not matched/parsed at squad row {index + 1} (submitted {lookup_label}: '{submitted_value}')."
             )
-            raise RegistrationError(f"player id not matched/parsed at squad row {index + 1}.")
         resolved_players.append(player)
 
     eligible_players: list[Player] = []

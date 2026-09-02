@@ -2002,7 +2002,8 @@ def test_match_day_squad_submission_reports_unmatched_player_ids_by_row():
         )
 
     body = response.body.decode("utf-8", errors="ignore")
-    assert "player id not matched/parsed at squad row 2." in body
+    assert "player id not matched/parsed at squad row 2 (" in body
+    assert "99999999" in body
 
 
 def test_match_day_squad_submission_accepts_squad_rows_json_payload():
