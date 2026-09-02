@@ -1507,7 +1507,7 @@
       <div class="panel-heading">
         <div>
           <h2>Match Day Squad</h2>
-          <p class="section-copy"><strong>Build the squad from approved clubs, then select a fixture before generating the final list and squad card.</strong></p>
+          <p class="section-copy"><strong>Build the squad from approved clubs. The fixture only fills the exported list details, so add players club by club, then generate the squad once the list is complete.</strong></p>
         </div>
       </div>
       <div class="alert" style="background:#fff2cc; border-color:#d9a300; color:#111; margin-bottom: 1rem;">
@@ -1902,15 +1902,6 @@
                 }
                 return;
               }
-              if (!activeFixture) {
-                playerSelect.innerHTML = '<option value="">Select fixture first</option>';
-                playerSelect.disabled = true;
-                jerseyInput.disabled = true;
-                if (addButton) {
-                  addButton.disabled = true;
-                }
-                return;
-              }
               const requestToken = ++playerRequestToken;
               playerSelect.innerHTML = '<option value="">Loading players...</option>';
               playerSelect.disabled = true;
@@ -1919,7 +1910,6 @@
                 addButton.disabled = true;
               }
               const params = new URLSearchParams({
-                fixture_id: String(fixtureSelect?.value || ""),
                 club_id: String(activeClub.value || ""),
               });
               try {
@@ -1946,7 +1936,7 @@
                   if (addButton) {
                     addButton.disabled = true;
                   }
-                  setMatchDayError(`All eligible players from ${payload.club_name || "the selected club"} are already in the squad list.`);
+                  setMatchDayError(`No approved players were returned for ${payload.club_name || "the selected club"}.`);
                   return;
                 }
                 playerSelect.innerHTML = '<option value="">Select player</option>';
@@ -2038,14 +2028,14 @@
             const syncClubSelection = () => {
               activeClub = clubSelect?.selectedOptions?.[0] && clubSelect.value ? clubSelect.selectedOptions[0] : null;
               clearMatchDayError();
+              playerSelect.value = "";
+              jerseyInput.value = "";
               refreshPlayerSelect();
             };
 
             const syncFixtureSelection = () => {
               activeFixture = fixtureData.find((fixture) => String(fixture.fixture_id) === String(fixtureSelect.value)) || null;
-              clearMatchDayError();
-              clearSquadList();
-              refreshPlayerSelect();
+              updateFixturePreview(activeFixture);
             };
 
             fixtureSelect?.addEventListener("change", syncFixtureSelection);
@@ -2071,20 +2061,10 @@
                 setMatchDayError("Select a fixture before generating the squad.");
                 return;
               }
-              if (!activeClub) {
-                event.preventDefault();
-                setMatchDayError("Select a club before generating the squad.");
-                return;
-              }
               if (!squadList.querySelector("[data-squad-row]")) {
                 event.preventDefault();
                 setMatchDayError("Add at least one player to the squad list.");
                 return;
-              }
-              const missingPlayerIdRow = squadList.querySelector("[data-squad-row]:not([data-player-id])");
-              if (missingPlayerIdRow) {
-                event.preventDefault();
-                setMatchDayError("player id not parsed from squad list row.");
               }
             });
           })();

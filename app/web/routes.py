@@ -90,7 +90,6 @@ from app.services.registration import (
     age_on,
     verify_email_code,
     verify_password_recovery_code,
-    player_can_play_for_category,
     player_matches_exact_category,
 )
 from app.services.team_access import (
@@ -2140,15 +2139,11 @@ def create_team_admin_match_day_squad(
 @router.get("/api/team-admin/match-day-squad-players")
 def team_admin_match_day_squad_players(
     request: Request,
-    fixture_id: str,
     club_id: str,
+    fixture_id: str | None = None,
     db: Session = Depends(get_db),
 ):
     team_admin = _require_team_admin(request, db)
-    try:
-        parsed_fixture_id = int(str(fixture_id).strip())
-    except (TypeError, ValueError):
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"error": "fixture id not parsed from selected fixture."})
     try:
         parsed_club_id = int(str(club_id).strip())
     except (TypeError, ValueError):
@@ -2160,18 +2155,6 @@ def team_admin_match_day_squad_players(
             status_code=status.HTTP_403_FORBIDDEN,
             content={"error": f"Club id {parsed_club_id} is not approved for this team admin."},
         )
-
-    fixture = db.scalar(
-        select(Fixture)
-        .options(
-            selectinload(Fixture.category),
-            selectinload(Fixture.home_team),
-            selectinload(Fixture.away_team),
-        )
-        .where(Fixture.fixture_id == parsed_fixture_id)
-    )
-    if not fixture or not fixture.category or not fixture.home_team or not fixture.away_team:
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "Selected fixture could not be found."})
 
     club = db.scalar(
         select(Team)
@@ -2194,20 +2177,8 @@ def team_admin_match_day_squad_players(
             Player.is_on_loan.is_(False),
         )
         .order_by(Player.full_name.asc(), Player.player_id.asc())
-    ).all()
-    eligible_players = [player for player in players if player_can_play_for_category(player, fixture.category.category_name)]
-    if not eligible_players:
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={
-                "error": f"No eligible players were returned for {club.team_name} in {fixture.category.category_name}.",
-                "fixture_category_name": fixture.category.category_name,
-                "club_name": club.team_name,
-            },
-        )
+        ).all()
     return {
-        "fixture_id": fixture.fixture_id,
-        "fixture_category_name": fixture.category.category_name,
         "club_id": club.team_id,
         "club_name": club.team_name,
         "players": [
@@ -2220,7 +2191,7 @@ def team_admin_match_day_squad_players(
                 "team_name": player.team.team_name if player.team else "-",
                 "category_name": player.team.category.category_name if player.team and player.team.category else "-",
             }
-            for player in eligible_players
+            for player in players
         ],
     }
 

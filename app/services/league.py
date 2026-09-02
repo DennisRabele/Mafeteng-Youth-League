@@ -31,7 +31,7 @@ from app.models import (
     UserRole,
 )
 from app.services.email import send_notification_email
-from app.services.registration import RegistrationError, player_can_play_for_category, player_matches_exact_category
+from app.services.registration import RegistrationError, player_matches_exact_category
 from app.services.storage import delete_upload
 
 
@@ -363,7 +363,7 @@ def create_match_day_squad(
         )
         .where(Fixture.fixture_id == fixture_id)
     )
-    if not fixture or not fixture.category or not fixture.home_team or not fixture.away_team:
+    if not fixture or not fixture.home_team or not fixture.away_team:
         raise RegistrationError("Selected fixture could not be found.")
     if not club_ids:
         raise RegistrationError("Select a club for each player in the squad.")
@@ -414,10 +414,6 @@ def create_match_day_squad(
             raise RegistrationError(f"{player.full_name} is not registered for {club.team_name}.")
         if player.status != ApprovalStatus.APPROVED.value:
             raise RegistrationError(f"{player.full_name} is not approved for selection.")
-        if not player_can_play_for_category(player, fixture.category.category_name):
-            raise RegistrationError(
-                f"{player.full_name} is registered in {player.age_group or 'another category'} and cannot be selected for {fixture.category.category_name}."
-            )
         eligible_players.append(player)
 
     base_club = club_map[club_ids[0]]

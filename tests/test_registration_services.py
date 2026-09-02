@@ -50,7 +50,7 @@ from app.services.team_access import (
     load_team_admin_owned_approved_teams,
 )
 from app.services.league import _finalize_single_result_submission, get_league_tables, get_player_performances
-from app.services.league import submit_match_result
+from app.services.league import create_match_day_squad, get_match_day_squad, submit_match_result
 from app.web.routes import _load_result_fixture_players
 import app.web.routes as routes
 
@@ -1727,6 +1727,174 @@ def test_match_result_submission_rejects_players_from_other_team_under_the_same_
         assert "own club" in str(exc)
     else:
         raise AssertionError("Expected the other team\'s player to be rejected.")
+
+
+def test_match_day_squad_generation_uses_selected_clubs_without_fixture_category_gating():
+    db = make_session()
+    season = Season(
+        season_name="2026 Squad Season",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+    )
+    db.add(season)
+    db.flush()
+    u13_category = Category(season_id=season.season_id, category_name="Male U13")
+    u17_category = Category(season_id=season.season_id, category_name="Male U17")
+    db.add_all([u13_category, u17_category])
+    db.commit()
+
+    team_admin = create_team_admin_registration(
+        db,
+        full_name="Squad Admin",
+        team_name="Squad Makers",
+        email="squad@example.test",
+        password="Password123",
+        national_id="NID-SQUAD",
+        phone="+26653330000",
+        photo_path="/uploads/admin-photos/squad.png",
+    )
+    team_admin = approve_team_admin(db, team_admin.team_admin_id)
+
+    fixture_home_team = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=team_admin.team_admin_id,
+            team_name="Fixture Home FC",
+            category_id=u17_category.category_id,
+            contact_information="+26653330001",
+            team_address="Fixture Home Road",
+            training_ground="Fixture Home Training",
+            home_ground="Fixture Home Ground",
+            logo="/uploads/team-logos/fixture-home.png",
+        ).team_id,
+    )
+    fixture_away_team = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=team_admin.team_admin_id,
+            team_name="Fixture Away FC",
+            category_id=u17_category.category_id,
+            contact_information="+26653330002",
+            team_address="Fixture Away Road",
+            training_ground="Fixture Away Training",
+            home_ground="Fixture Away Ground",
+            logo="/uploads/team-logos/fixture-away.png",
+        ).team_id,
+    )
+    squad_u13_team = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=team_admin.team_admin_id,
+            team_name="Squad U13 FC",
+            category_id=u13_category.category_id,
+            contact_information="+26653330003",
+            team_address="Squad U13 Road",
+            training_ground="Squad U13 Training",
+            home_ground="Squad U13 Ground",
+            logo="/uploads/team-logos/squad-u13.png",
+        ).team_id,
+    )
+    squad_u17_team = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=team_admin.team_admin_id,
+            team_name="Squad U17 FC",
+            category_id=u17_category.category_id,
+            contact_information="+26653330004",
+            team_address="Squad U17 Road",
+            training_ground="Squad U17 Training",
+            home_ground="Squad U17 Ground",
+            logo="/uploads/team-logos/squad-u17.png",
+        ).team_id,
+    )
+
+    squad_u13_player = approve_player(
+        db,
+        register_player(
+            db,
+            team_id=squad_u13_team.team_id,
+            full_name="Squad Alpha Player",
+            gender="Male",
+            dob=years_ago(13),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            parent_name="Parent Alpha",
+            parent_contact="+26653330005",
+            school_name=None,
+            position="Forward",
+            agreement_form_path="/uploads/player-agreements/squad-u13.pdf",
+            photo_path=None,
+            documents=[],
+            registration_period=1,
+        ).player_id,
+    )
+    squad_u17_player = approve_player(
+        db,
+        register_player(
+            db,
+            team_id=squad_u17_team.team_id,
+            full_name="Squad Beta Player",
+            gender="Male",
+            dob=years_ago(17),
+            nationality="Mosotho",
+            email=None,
+            residential_address=None,
+            parent_name="Parent Beta",
+            parent_contact="+26653330006",
+            school_name=None,
+            position="Midfielder",
+            agreement_form_path="/uploads/player-agreements/squad-u17.pdf",
+            photo_path=None,
+            documents=[],
+            registration_period=1,
+        ).player_id,
+    )
+
+    fixture = Fixture(
+        season_id=season.season_id,
+        category_id=u17_category.category_id,
+        home_team_id=fixture_home_team.team_id,
+        away_team_id=fixture_away_team.team_id,
+        fixture_date=datetime.utcnow() - timedelta(days=1),
+        venue="Squad Venue",
+        status="completed",
+    )
+    db.add(fixture)
+    db.flush()
+    db.add(
+        Match(
+            fixture_id=fixture.fixture_id,
+            match_date=fixture.fixture_date,
+            status="completed",
+            home_score=0,
+            away_score=0,
+        )
+    )
+    db.commit()
+
+    squad = create_match_day_squad(
+        db,
+        fixture_id=fixture.fixture_id,
+        club_ids=[squad_u13_team.team_id, squad_u17_team.team_id],
+        generated_by_team_admin_id=team_admin.team_admin_id,
+        player_ids=[squad_u13_player.player_id, squad_u17_player.player_id],
+        jersey_numbers=[4, 8],
+    )
+
+    loaded_squad = get_match_day_squad(db, squad.squad_id)
+    assert loaded_squad is not None
+    assert loaded_squad.fixture.fixture_id == fixture.fixture_id
+    assert loaded_squad.team_id == squad_u13_team.team_id
+    assert [member.player_name_snapshot for member in loaded_squad.members] == [
+        "Squad Alpha Player",
+        "Squad Beta Player",
+    ]
+    assert [member.jersey_number for member in loaded_squad.members] == [4, 8]
 
 
 def test_rejection_reasons_are_required_and_saved():
