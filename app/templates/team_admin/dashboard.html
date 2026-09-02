@@ -1869,6 +1869,7 @@
             const matchDayError = document.querySelector("[data-match-day-error]");
             const fixtureData = JSON.parse(document.getElementById("match-day-fixture-data")?.textContent || "[]");
             const matchDayPlayerApi = "/api/team-admin/match-day-squad-players";
+            const squadPayloadInput = document.getElementById("match-day-squad-rows-json");
             const selectedPlayerIds = new Set();
             let activeFixture = null;
             let activeClub = null;
@@ -2088,7 +2089,6 @@
                 setMatchDayError("Add at least one player to the squad list.");
                 return;
               }
-              syncSquadPayload();
             });
           })();
         </script>
