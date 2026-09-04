@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
+from app.db.session import _purge_rejected_team_admins
 from app.models import (
     ApprovalStatus,
     Category,
@@ -2442,6 +2443,42 @@ def test_rejection_reasons_are_required_and_saved():
     player = reject_player(db, player.player_id, "Parent consent picture missing.")
     assert player.status == ApprovalStatus.REJECTED.value
     assert player.rejection_reason == "Parent consent picture missing."
+
+
+def test_purging_rejected_team_admins_allows_re_registration_with_same_email():
+    db = make_session()
+    seed_category(db)
+
+    rejected_admin = create_team_admin_registration(
+        db,
+        full_name="Rejected Admin",
+        team_name="Red Stars",
+        email="purge-me@example.test",
+        password="Password123",
+        national_id="NID-PURGE",
+        phone="+26651110000",
+        photo_path="/uploads/admin-photos/rejected.png",
+    )
+    rejected_admin.status = ApprovalStatus.REJECTED.value
+    rejected_admin.rejection_reason = "Legacy rejected row"
+    db.commit()
+
+    _purge_rejected_team_admins(db)
+
+    assert db.get(TeamAdmin, rejected_admin.team_admin_id) is None
+    assert db.get(User, rejected_admin.user_id) is None
+
+    recreated_admin = create_team_admin_registration(
+        db,
+        full_name="Rejected Admin",
+        team_name="Red Stars",
+        email="purge-me@example.test",
+        password="Password123",
+        national_id="NID-PURGE",
+        phone="+26651110000",
+        photo_path="/uploads/admin-photos/rejected-2.png",
+    )
+    assert recreated_admin.user.email == "purge-me@example.test"
 
 
 def test_email_verification_codes_are_required_and_consumed():
