@@ -2353,11 +2353,13 @@ def test_rejection_reasons_are_required_and_saved():
     else:
         raise AssertionError("Expected blank Team Admin rejection reason to fail.")
 
-    rejected_admin = reject_team_admin(
-        db,
-        rejected_admin.team_admin_id,
-        "National ID photo is unclear.",
-    )
+    with patch("app.services.registration.send_notification_email") as send_notification_email:
+        rejected_admin = reject_team_admin(
+            db,
+            rejected_admin.team_admin_id,
+            "National ID photo is unclear.",
+        )
+    send_notification_email.assert_called_once()
     assert db.get(TeamAdmin, rejected_admin.team_admin_id) is None
     assert db.get(User, rejected_admin.user_id) is None
 

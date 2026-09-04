@@ -33,6 +33,7 @@ from app.models import (
     UserRole,
 )
 from app.services.team_access import load_team_admin_approved_team_ids, load_team_admin_primary_team
+from app.services.email import EmailDeliveryError, send_notification_email
 
 
 class RegistrationError(ValueError):
@@ -787,12 +788,24 @@ def reject_team_admin(db: Session, team_admin_id: int, rejection_reason: str) ->
     rejected_reason = rejection_reason.strip()
     user = team_admin.user
     user_id = team_admin.user_id
+    user_email = user.email if user else None
+    user_name = user.full_name if user else "Team Admin"
+    team_admin.rejection_reason = rejected_reason
+    if user_email:
+        try:
+            send_notification_email(
+                to_email=user_email,
+                title="Team Admin registration rejected",
+                message=f"Hello {user_name}, your Team Admin registration was rejected: {rejected_reason}",
+                link="/login",
+            )
+        except EmailDeliveryError as exc:
+            raise RegistrationError("Rejection email could not be sent. Please try again.") from exc
     db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
     db.delete(team_admin)
     if user:
         db.delete(user)
     db.commit()
-    team_admin.rejection_reason = rejected_reason
     return team_admin
 
 
