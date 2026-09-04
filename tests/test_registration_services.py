@@ -17,6 +17,7 @@ from app.models import (
     PlayerRegistrationRequest,
     Season,
     SuperAdmin,
+    User,
     TeamAdmin,
     TransferStatus,
 )
@@ -2342,7 +2343,7 @@ def test_rejection_reasons_are_required_and_saved():
         password="Password123",
         national_id="NID-REJECTED",
         phone="+26651110000",
-        photo_path=None,
+        photo_path="/uploads/admin-photos/rejected.png",
     )
 
     try:
@@ -2357,8 +2358,20 @@ def test_rejection_reasons_are_required_and_saved():
         rejected_admin.team_admin_id,
         "National ID photo is unclear.",
     )
-    assert rejected_admin.status == ApprovalStatus.REJECTED.value
-    assert rejected_admin.rejection_reason == "National ID photo is unclear."
+    assert db.get(TeamAdmin, rejected_admin.team_admin_id) is None
+    assert db.get(User, rejected_admin.user_id) is None
+
+    recreated_admin = create_team_admin_registration(
+        db,
+        full_name="Rejected Admin",
+        team_name="Red Stars",
+        email="rejected@example.test",
+        password="Password123",
+        national_id="NID-REJECTED",
+        phone="+26651110000",
+        photo_path="/uploads/admin-photos/rejected-2.png",
+    )
+    assert recreated_admin.user.email == "rejected@example.test"
 
     approved_admin = create_team_admin_registration(
         db,
@@ -2368,7 +2381,7 @@ def test_rejection_reasons_are_required_and_saved():
         password="Password123",
         national_id="NID-APPROVED",
         phone="+26652220000",
-        photo_path=None,
+        photo_path="/uploads/admin-photos/approved.png",
     )
     approved_admin = approve_team_admin(db, approved_admin.team_admin_id)
 
@@ -2385,7 +2398,7 @@ def test_rejection_reasons_are_required_and_saved():
         team_address="Green City Road",
         training_ground="Green Training",
         home_ground="Green Ground",
-        logo=None,
+        logo="/uploads/team-logos/green-city.png",
     )
     rejected_team = reject_team(
         db,
@@ -2404,7 +2417,7 @@ def test_rejection_reasons_are_required_and_saved():
         team_address="Green City Road",
         training_ground="Green Training",
         home_ground="Green Ground",
-        logo=None,
+        logo="/uploads/team-logos/green-city-juniors.png",
     )
     approved_team = approve_team(db, approved_team.team_id)
     player = register_player(

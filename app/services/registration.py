@@ -17,6 +17,7 @@ from app.models import (
     ApprovalStatus,
     Category,
     Parent,
+    Notification,
     Player,
     PlayerDocument,
     PlayerRegistrationRequest,
@@ -783,22 +784,15 @@ def reject_team_admin(db: Session, team_admin_id: int, rejection_reason: str) ->
     if not rejection_reason.strip():
         raise RegistrationError("A rejection reason is required.")
 
-    team_admin.status = ApprovalStatus.REJECTED.value
-    team_admin.rejection_reason = rejection_reason.strip()
+    rejected_reason = rejection_reason.strip()
+    user = team_admin.user
+    user_id = team_admin.user_id
+    db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
+    db.delete(team_admin)
+    if user:
+        db.delete(user)
     db.commit()
-    db.refresh(team_admin)
-    try:
-        from app.services.league import create_notification
-
-        create_notification(
-            db,
-            user_id=team_admin.user_id,
-            title="Team Admin rejected",
-            message=f"Your Team Admin registration was rejected: {team_admin.rejection_reason}",
-            link="/login",
-        )
-    except Exception:
-        pass
+    team_admin.rejection_reason = rejected_reason
     return team_admin
 
 
