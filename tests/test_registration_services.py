@@ -17,6 +17,7 @@ from app.models import (
     PlayerStatistic,
     PlayerRegistrationRequest,
     Season,
+    Notification,
     SuperAdmin,
     User,
     TeamAdmin,
@@ -2510,7 +2511,7 @@ def test_renewal_and_transfer_registration_flow_records_database_changes():
         password="Password123",
         national_id="NID-FROM",
         phone="+26653330000",
-        photo_path=None,
+        photo_path="/uploads/admin-photos/from-admin.png",
     )
     to_admin = create_team_admin_registration(
         db,
@@ -2520,7 +2521,7 @@ def test_renewal_and_transfer_registration_flow_records_database_changes():
         password="Password123",
         national_id="NID-TO",
         phone="+26654440000",
-        photo_path=None,
+        photo_path="/uploads/admin-photos/to-admin.png",
     )
     from_admin = approve_team_admin(db, from_admin.team_admin_id)
     to_admin = approve_team_admin(db, to_admin.team_admin_id)
@@ -2534,7 +2535,7 @@ def test_renewal_and_transfer_registration_flow_records_database_changes():
         team_address="Blue Road",
         training_ground="Blue Training",
         home_ground="Blue Ground",
-        logo=None,
+        logo="/uploads/team-logos/blue-eagles.png",
     )
     to_team = register_team(
         db,
@@ -2545,7 +2546,7 @@ def test_renewal_and_transfer_registration_flow_records_database_changes():
         team_address="Red Road",
         training_ground="Red Training",
         home_ground="Red Ground",
-        logo=None,
+        logo="/uploads/team-logos/red-stars.png",
     )
     from_team = approve_team(db, from_team.team_id)
     to_team = approve_team(db, to_team.team_id)
@@ -2682,6 +2683,141 @@ def test_renewal_and_transfer_registration_flow_records_database_changes():
     assert permanent_registration is not None
     assert permanent_registration.player.team_id == to_team.team_id
     assert permanent_registration.player.status == ApprovalStatus.PENDING.value
+
+
+def test_transfer_requests_notify_both_team_admins_with_access_path():
+    db = make_session()
+    category = seed_category(db)
+
+    from_admin = create_team_admin_registration(
+        db,
+        full_name="From Admin",
+        team_name="Blue Eagles",
+        email="transfer-from@example.test",
+        password="Password123",
+        national_id="NID-TRANSFER-FROM",
+        phone="+26653330000",
+        photo_path="/uploads/admin-photos/transfer-from.png",
+    )
+    to_admin = create_team_admin_registration(
+        db,
+        full_name="To Admin",
+        team_name="Red Stars",
+        email="transfer-to@example.test",
+        password="Password123",
+        national_id="NID-TRANSFER-TO",
+        phone="+26654440000",
+        photo_path="/uploads/admin-photos/transfer-to.png",
+    )
+    from_admin = approve_team_admin(db, from_admin.team_admin_id)
+    to_admin = approve_team_admin(db, to_admin.team_admin_id)
+
+    from_team = register_team(
+        db,
+        team_admin_id=from_admin.team_admin_id,
+        team_name="Blue Eagles",
+        category_id=category.category_id,
+        contact_information="+26653330001",
+        team_address="Blue Road",
+        training_ground="Blue Training",
+        home_ground="Blue Ground",
+        logo="/uploads/team-logos/blue-eagles.png",
+    )
+    to_team = register_team(
+        db,
+        team_admin_id=to_admin.team_admin_id,
+        team_name="Red Stars",
+        category_id=category.category_id,
+        contact_information="+26654440001",
+        team_address="Red Road",
+        training_ground="Red Training",
+        home_ground="Red Ground",
+        logo="/uploads/team-logos/red-stars.png",
+    )
+    from_team = approve_team(db, from_team.team_id)
+    to_team = approve_team(db, to_team.team_id)
+
+    outgoing_player = register_player(
+        db,
+        team_id=from_team.team_id,
+        full_name="Outgoing Player",
+        gender="Male",
+        dob=date(2010, 5, 1),
+        nationality="Mosotho",
+        email=None,
+        residential_address=None,
+        parent_name="Parent Five",
+        parent_contact="+26653330002",
+        school_name=None,
+        position="Forward",
+        agreement_form_path="/uploads/player-agreements/outgoing.pdf",
+        photo_path="/uploads/player-photos/outgoing.jpg",
+        documents=[("Birth Certificate", "/uploads/player-documents/outgoing-birth.pdf")],
+    )
+    approve_player(db, outgoing_player.player_id)
+
+    incoming_player = register_player(
+        db,
+        team_id=from_team.team_id,
+        full_name="Incoming Player",
+        gender="Male",
+        dob=date(2010, 6, 1),
+        nationality="Mosotho",
+        email=None,
+        residential_address=None,
+        parent_name="Parent Six",
+        parent_contact="+26653330003",
+        school_name=None,
+        position="Defender",
+        agreement_form_path="/uploads/player-agreements/incoming.pdf",
+        photo_path="/uploads/player-photos/incoming.jpg",
+        documents=[("Birth Certificate", "/uploads/player-documents/incoming-birth.pdf")],
+    )
+    approve_player(db, incoming_player.player_id)
+
+    with patch("app.services.league.send_notification_email") as send_notification_email:
+        request_player_transfer(
+            db,
+            team_admin_id=from_admin.team_admin_id,
+            player_id=outgoing_player.player_id,
+            to_team_id=to_team.team_id,
+            transfer_type="Permanent Transfer",
+            player_details=outgoing_player.full_name,
+            transfer_conditions="Transfer the player to the new club.",
+            registration_period=1,
+        )
+
+    assert send_notification_email.call_count == 2
+    outgoing_notifications = db.scalars(
+        select(Notification).where(Notification.title == "Transfer request sent")
+    ).all()
+    assert len(outgoing_notifications) == 2
+    assert all(
+        "My clubs -> Register Players -> transferred players" in notification.message
+        for notification in outgoing_notifications
+    )
+
+    with patch("app.services.league.send_notification_email") as send_notification_email:
+        request_player_from_team(
+            db,
+            team_admin_id=to_admin.team_admin_id,
+            player_id=incoming_player.player_id,
+            from_team_id=from_team.team_id,
+            to_team_id=to_team.team_id,
+            request_type="Permanent Request",
+            request_details="Please release the player to us.",
+            registration_period=1,
+        )
+
+    assert send_notification_email.call_count == 2
+    incoming_notifications = db.scalars(
+        select(Notification).where(Notification.title == "Player transfer requested")
+    ).all()
+    assert len(incoming_notifications) == 2
+    assert all(
+        "My clubs -> Register Players -> transferred players" in notification.message
+        for notification in incoming_notifications
+    )
 
 
 def test_renewal_registration_rejects_players_whose_current_term_has_not_expired():
