@@ -2820,6 +2820,205 @@ def test_transfer_requests_notify_both_team_admins_with_access_path():
     )
 
 
+def test_transfer_search_filters_players_by_selected_team_and_category():
+    db = make_session()
+    category = seed_category(db)
+
+    from_admin = create_team_admin_registration(
+        db,
+        full_name="Search From Admin",
+        team_name="Blue Falcons",
+        email="search-from@example.test",
+        password="Password123",
+        national_id="NID-SEARCH-FROM",
+        phone="+26653330010",
+        photo_path="/uploads/admin-photos/search-from.png",
+    )
+    to_admin = create_team_admin_registration(
+        db,
+        full_name="Search To Admin",
+        team_name="Red Hawks",
+        email="search-to@example.test",
+        password="Password123",
+        national_id="NID-SEARCH-TO",
+        phone="+26654440010",
+        photo_path="/uploads/admin-photos/search-to.png",
+    )
+    from_admin = approve_team_admin(db, from_admin.team_admin_id)
+    to_admin = approve_team_admin(db, to_admin.team_admin_id)
+
+    from_team = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=from_admin.team_admin_id,
+            team_name="Blue Falcons",
+            category_id=category.category_id,
+            contact_information="+26653330011",
+            team_address="Blue Search Road",
+            training_ground="Blue Search Ground",
+            home_ground="Blue Search Home",
+            logo="/uploads/team-logos/blue-falcons.png",
+        ).team_id,
+    )
+    other_team = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=to_admin.team_admin_id,
+            team_name="Red Hawks",
+            category_id=category.category_id,
+            contact_information="+26654440011",
+            team_address="Red Search Road",
+            training_ground="Red Search Ground",
+            home_ground="Red Search Home",
+            logo="/uploads/team-logos/red-hawks.png",
+        ).team_id,
+    )
+
+    from_player = register_player(
+        db,
+        team_id=from_team.team_id,
+        full_name="Transfer Search Player",
+        gender="Male",
+        dob=date(2010, 4, 1),
+        nationality="Mosotho",
+        email=None,
+        residential_address=None,
+        parent_name="Parent Search One",
+        parent_contact="+26653330013",
+        school_name=None,
+        position="Forward",
+        agreement_form_path="/uploads/player-agreements/search-from.pdf",
+        photo_path="/uploads/player-photos/search-from.jpg",
+        documents=[],
+    )
+    approve_player(db, from_player.player_id)
+
+    other_player = register_player(
+        db,
+        team_id=other_team.team_id,
+        full_name="Transfer Search Player",
+        gender="Male",
+        dob=date(2010, 4, 1),
+        nationality="Mosotho",
+        email=None,
+        residential_address=None,
+        parent_name="Parent Search Two",
+        parent_contact="+26653330014",
+        school_name=None,
+        position="Defender",
+        agreement_form_path="/uploads/player-agreements/search-other.pdf",
+        photo_path="/uploads/player-photos/search-other.jpg",
+        documents=[],
+    )
+    approve_player(db, other_player.player_id)
+
+    result = routes.search_players_by_name(
+        name="Transfer Search Player",
+        team_id=from_team.team_id,
+        category_id=category.category_id,
+        db=db,
+    )
+    assert [player["player_id"] for player in result["players"]] == [from_player.player_id]
+
+
+def test_transfer_request_rejects_players_from_other_categories():
+    db = make_session()
+    category = seed_category(db)
+    other_category = Category(season_id=category.season_id, category_name="Male U13")
+    db.add(other_category)
+    db.commit()
+
+    requester_admin = create_team_admin_registration(
+        db,
+        full_name="Requester Admin",
+        team_name="Red Hawks",
+        email="requester@example.test",
+        password="Password123",
+        national_id="NID-REQUESTER",
+        phone="+26654440010",
+        photo_path="/uploads/admin-photos/requester.png",
+    )
+    source_admin = create_team_admin_registration(
+        db,
+        full_name="Source Admin",
+        team_name="Green Owls",
+        email="source@example.test",
+        password="Password123",
+        national_id="NID-SOURCE",
+        phone="+26653330010",
+        photo_path="/uploads/admin-photos/source.png",
+    )
+    requester_admin = approve_team_admin(db, requester_admin.team_admin_id)
+    source_admin = approve_team_admin(db, source_admin.team_admin_id)
+
+    requester_team = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=requester_admin.team_admin_id,
+            team_name="Red Hawks",
+            category_id=category.category_id,
+            contact_information="+26654440011",
+            team_address="Red Road",
+            training_ground="Red Ground",
+            home_ground="Red Home",
+            logo="/uploads/team-logos/red-hawks.png",
+        ).team_id,
+    )
+    source_team = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=source_admin.team_admin_id,
+            team_name="Green Owls",
+            category_id=other_category.category_id,
+            contact_information="+26653330011",
+            team_address="Green Road",
+            training_ground="Green Ground",
+            home_ground="Green Home",
+            logo="/uploads/team-logos/green-owls.png",
+        ).team_id,
+    )
+
+    source_player = register_player(
+        db,
+        team_id=source_team.team_id,
+        full_name="Other Category Player",
+        gender="Male",
+        dob=date(2013, 4, 1),
+        nationality="Mosotho",
+        email=None,
+        residential_address=None,
+        parent_name="Parent Source",
+        parent_contact="+26653330012",
+        school_name=None,
+        position="Forward",
+        agreement_form_path="/uploads/player-agreements/source.pdf",
+        photo_path="/uploads/player-photos/source.jpg",
+        documents=[],
+    )
+    approve_player(db, source_player.player_id)
+
+    with patch("app.services.league.send_notification_email"):
+        try:
+            request_player_from_team(
+                db,
+                team_admin_id=requester_admin.team_admin_id,
+                player_id=source_player.player_id,
+                from_team_id=source_team.team_id,
+                to_team_id=requester_team.team_id,
+                request_type="Permanent Request",
+                request_details="Should fail because the categories do not match.",
+                registration_period=1,
+            )
+        except RegistrationError as exc:
+            assert "same category" in str(exc)
+        else:
+            raise AssertionError("Expected mismatched transfer request to be rejected.")
+
+
 def test_renewal_registration_rejects_players_whose_current_term_has_not_expired():
     db = make_session()
     category = seed_category(db)
