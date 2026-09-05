@@ -20,6 +20,7 @@ from app.models import (
     Notification,
     SuperAdmin,
     User,
+    Team,
     TeamAdmin,
     TransferStatus,
 )
@@ -2627,6 +2628,9 @@ def test_renewal_and_transfer_registration_flow_records_database_changes():
     assert new_player.team_id == to_team.team_id
     assert new_player.status == ApprovalStatus.PENDING.value
     assert new_player.photo_path == "/uploads/player-photos/player.jpg"
+    assert new_player.is_on_loan is True
+    assert new_player.loan_end_date == transfer.loan_end_date
+    assert new_player.original_team_id == from_team.team_id
     assert any(doc.file_path == "/uploads/player-documents/birth.pdf" for doc in new_player.documents)
     assert any(doc.document_type == "Parent/Guardian Consent Form" for doc in new_player.documents)
 
@@ -2666,6 +2670,13 @@ def test_renewal_and_transfer_registration_flow_records_database_changes():
     )
     assert permanent_transfer.player.status == "transferred"
     assert permanent_transfer.player.team_id == from_team.team_id
+    old_team_visible_players = db.scalars(
+        select(Player)
+        .join(Team, Player.team_id == Team.team_id)
+        .where(Team.team_id == from_team.team_id)
+        .where(Player.status != "transferred")
+    ).all()
+    assert permanent_player.player_id not in [player.player_id for player in old_team_visible_players]
 
     complete_transfer_registration(
         db,
