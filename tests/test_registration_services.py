@@ -2604,6 +2604,7 @@ def test_renewal_and_transfer_registration_flow_records_database_changes():
     assert transfer.status == TransferStatus.AGREED.value
     assert transfer.player.team_id == from_team.team_id
     assert transfer.player.is_on_loan is True
+    assert get_player_registration_expiry_date(db, transfer.player) == transfer.loan_end_date
 
     transfer = complete_transfer_registration(
         db,
@@ -2630,6 +2631,7 @@ def test_renewal_and_transfer_registration_flow_records_database_changes():
     assert new_player.photo_path == "/uploads/player-photos/player.jpg"
     assert new_player.is_on_loan is True
     assert new_player.loan_end_date == transfer.loan_end_date
+    assert get_player_registration_expiry_date(db, new_player) == transfer.loan_end_date
     assert new_player.original_team_id == from_team.team_id
     assert any(doc.file_path == "/uploads/player-documents/birth.pdf" for doc in new_player.documents)
     assert any(doc.document_type == "Parent/Guardian Consent Form" for doc in new_player.documents)
