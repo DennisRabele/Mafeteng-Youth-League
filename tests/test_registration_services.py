@@ -3030,6 +3030,103 @@ def test_transfer_request_rejects_players_from_other_categories():
             raise AssertionError("Expected mismatched transfer request to be rejected.")
 
 
+def test_transfer_request_reports_player_team_mismatch_with_details():
+    db = make_session()
+    category = seed_category(db)
+
+    requester_admin = create_team_admin_registration(
+        db,
+        full_name="Requester Admin",
+        team_name="Red Hawks",
+        email="requester-mismatch@example.test",
+        password="Password123",
+        national_id="NID-REQUESTER-MISMATCH",
+        phone="+26654440020",
+        photo_path="/uploads/admin-photos/requester-mismatch.png",
+    )
+    source_admin = create_team_admin_registration(
+        db,
+        full_name="Source Admin",
+        team_name="Blue Eagles",
+        email="source-mismatch@example.test",
+        password="Password123",
+        national_id="NID-SOURCE-MISMATCH",
+        phone="+26653330020",
+        photo_path="/uploads/admin-photos/source-mismatch.png",
+    )
+    requester_admin = approve_team_admin(db, requester_admin.team_admin_id)
+    source_admin = approve_team_admin(db, source_admin.team_admin_id)
+
+    requester_team = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=requester_admin.team_admin_id,
+            team_name="Red Hawks",
+            category_id=category.category_id,
+            contact_information="+26654440021",
+            team_address="Red Road",
+            training_ground="Red Ground",
+            home_ground="Red Home",
+            logo="/uploads/team-logos/red-hawks.png",
+        ).team_id,
+    )
+    source_team = approve_team(
+        db,
+        register_team(
+            db,
+            team_admin_id=source_admin.team_admin_id,
+            team_name="Blue Eagles",
+            category_id=category.category_id,
+            contact_information="+26653330021",
+            team_address="Blue Road",
+            training_ground="Blue Ground",
+            home_ground="Blue Home",
+            logo="/uploads/team-logos/blue-eagles.png",
+        ).team_id,
+    )
+
+    source_player = register_player(
+        db,
+        team_id=source_team.team_id,
+        full_name="Mismatch Player",
+        gender="Male",
+        dob=date(2010, 4, 1),
+        nationality="Mosotho",
+        email=None,
+        residential_address=None,
+        parent_name="Parent Mismatch",
+        parent_contact="+26653330022",
+        school_name=None,
+        position="Forward",
+        agreement_form_path="/uploads/player-agreements/mismatch.pdf",
+        photo_path="/uploads/player-photos/mismatch.jpg",
+        documents=[],
+    )
+    approve_player(db, source_player.player_id)
+
+    with patch("app.services.league.send_notification_email"):
+        try:
+            request_player_from_team(
+                db,
+                team_admin_id=requester_admin.team_admin_id,
+                player_id=source_player.player_id,
+                from_team_id=requester_team.team_id,
+                to_team_id=requester_team.team_id,
+                request_type="Permanent Request",
+                request_details="Should fail because the selected From Team is wrong.",
+                registration_period=1,
+            )
+        except RegistrationError as exc:
+            message = str(exc)
+            assert "Selected player mismatch" in message
+            assert "Mismatch Player" in message
+            assert "Blue Eagles" in message
+            assert "Red Hawks" in message
+        else:
+            raise AssertionError("Expected mismatched player/team selection to be rejected.")
+
+
 def test_renewal_registration_rejects_players_whose_current_term_has_not_expired():
     db = make_session()
     category = seed_category(db)
