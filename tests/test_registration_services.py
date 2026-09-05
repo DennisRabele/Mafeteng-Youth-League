@@ -42,6 +42,7 @@ from app.services.registration import (
     reject_team_admin,
     get_player_registration_expiry_date,
     process_player_registration_lifecycle,
+    restore_expired_loans,
     request_player_from_team,
     request_player_transfer,
     respond_to_transfer,
@@ -2635,6 +2636,29 @@ def test_renewal_and_transfer_registration_flow_records_database_changes():
     assert new_player.original_team_id == from_team.team_id
     assert any(doc.file_path == "/uploads/player-documents/birth.pdf" for doc in new_player.documents)
     assert any(doc.document_type == "Parent/Guardian Consent Form" for doc in new_player.documents)
+
+    expired_loan_date = date.today() - timedelta(days=1)
+    transfer.player.loan_end_date = expired_loan_date
+    transfer.player.is_on_loan = True
+    transfer.player.original_team_id = from_team.team_id
+    new_player.loan_end_date = expired_loan_date
+    new_player.is_on_loan = True
+    new_player.original_team_id = from_team.team_id
+    db.commit()
+
+    restore_expired_loans(db)
+    db.refresh(transfer.player)
+    db.refresh(new_player)
+
+    assert transfer.player.is_on_loan is False
+    assert transfer.player.original_team_id is None
+    assert transfer.player.loan_end_date is None
+    assert transfer.player.team_id == from_team.team_id
+
+    assert new_player.status == "transferred"
+    assert new_player.is_on_loan is False
+    assert new_player.original_team_id is None
+    assert new_player.loan_end_date is None
 
     permanent_player = register_player(
         db,

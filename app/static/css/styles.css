@@ -2137,6 +2137,11 @@ td {
   opacity: 1;
 }
 
+.player-loanee td {
+  filter: none;
+  opacity: 1;
+}
+
 .loan-marker {
   background: #eef2ff;
   border-radius: 4px;
@@ -2147,6 +2152,11 @@ td {
   margin-left: 8px;
   padding: 4px 6px;
   text-transform: uppercase;
+}
+
+.loan-marker.loanee {
+  background: #e8f5e9;
+  color: #1b5e20;
 }
 
 .doc-list {
