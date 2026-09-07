@@ -2774,7 +2774,6 @@ def _load_result_fixture_players(db: Session, fixture_id: int) -> dict[str, obje
             .where(
                 Player.team_id == team.team_id,
                 Player.status == ApprovalStatus.APPROVED.value,
-                Player.is_on_loan.is_(False),
             )
             .order_by(Player.full_name.asc(), Player.player_id.asc())
         ).all()
