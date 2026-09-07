@@ -437,7 +437,11 @@ def create_match_day_squad(
         )
         if is_source_loan_player:
             raise RegistrationError(f"{player.full_name} is on loan away from {club.team_name} and cannot be selected.")
-        if player.status != ApprovalStatus.APPROVED.value and not is_receiving_loan_player:
+        if player.status != ApprovalStatus.APPROVED.value:
+            if is_receiving_loan_player:
+                raise RegistrationError(
+                    f"{player.full_name} is a loanee pending approval for {club.team_name} and cannot be selected yet."
+                )
             raise RegistrationError(f"{player.full_name} is not approved for selection.")
         eligible_players.append(player)
 

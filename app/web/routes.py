@@ -2283,15 +2283,8 @@ def team_admin_match_day_squad_players(
     players = [
         player
         for player in players
-        if (
-            player.status == ApprovalStatus.APPROVED.value
-            and not (player.is_on_loan and player.original_team_id == club.team_id)
-        )
-        or (
-            player.is_on_loan
-            and player.original_team_id is not None
-            and player.original_team_id != club.team_id
-        )
+        if player.status == ApprovalStatus.APPROVED.value
+        and not (player.is_on_loan and player.original_team_id == club.team_id)
     ]
     return {
         "club_id": club.team_id,
@@ -3446,15 +3439,8 @@ def search_players_by_name(
         players = [
             player
             for player in players
-            if (
-                player.status == ApprovalStatus.APPROVED.value
-                and not (player.is_on_loan and player.original_team_id == team_id)
-            )
-            or (
-                player.is_on_loan
-                and player.original_team_id is not None
-                and player.original_team_id != team_id
-            )
+            if player.status == ApprovalStatus.APPROVED.value
+            and not (player.is_on_loan and player.original_team_id == team_id)
         ]
     else:
         players = [
