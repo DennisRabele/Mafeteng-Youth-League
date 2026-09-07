@@ -190,6 +190,54 @@ def test_registration_approval_flow_creates_team_season_and_qr_card():
     assert player.qr_player_card.qr_code == player.player_code
 
 
+def test_new_player_registration_supports_minimal_required_fields():
+    db = make_session()
+    category = seed_category(db)
+
+    team_admin = create_team_admin_registration(
+        db,
+        full_name="Minimal Admin",
+        team_name="Blue Eagles",
+        email="minimal-admin@example.test",
+        password="Password123",
+        national_id="NID-MINIMAL",
+        phone="+26650000003",
+        photo_path="/uploads/admin-photos/minimal-admin.png",
+    )
+    team_admin = approve_team_admin(db, team_admin.team_admin_id)
+    team = register_team(
+        db,
+        team_admin_id=team_admin.team_admin_id,
+        team_name="Blue Eagles",
+        category_id=category.category_id,
+        contact_information="+26650000004",
+        team_address="Minimal Road",
+        training_ground="Minimal Ground",
+        home_ground="Minimal Field",
+        logo="/uploads/team-logos/minimal-blue-eagles.png",
+    )
+    team = approve_team(db, team.team_id)
+
+    player = register_player(
+        db,
+        team_id=team.team_id,
+        full_name="Neo Striker",
+        gender="Male",
+        dob=years_ago(17),
+        position="Forward",
+        agreement_form_path="/uploads/player-documents/neo-id.pdf",
+        photo_path="/uploads/player-photos/neo.jpg",
+        documents=[("Identity Document", "/uploads/player-documents/neo-id.pdf")],
+    )
+
+    assert player.status == ApprovalStatus.PENDING.value
+    assert player.nationality == "Unknown"
+    assert player.parent_id is None
+    assert player.registration_period == 1
+    assert player.registration_requests[0].registration_type == "new"
+    assert player.registration_requests[0].agreement_form_path == "/uploads/player-documents/neo-id.pdf"
+
+
 def test_additional_team_admin_can_register_with_team_code_only():
     db = make_session()
     category = seed_category(db)
