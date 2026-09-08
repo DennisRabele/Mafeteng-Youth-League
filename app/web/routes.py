@@ -1648,9 +1648,10 @@ def reject_team_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
-        reject_team(db, team_id, rejection_reason)
+        super_admin_id = _get_super_admin_id(user)
+        reject_team(db, team_id, rejection_reason, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
     return _redirect("/super-admin")
@@ -1674,9 +1675,10 @@ def reject_player_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
-        reject_player(db, player_id, rejection_reason)
+        super_admin_id = _get_super_admin_id(user)
+        reject_player(db, player_id, rejection_reason, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
     return _redirect("/super-admin")
@@ -1700,9 +1702,10 @@ def reject_renewal_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
-        reject_renewal(db, registration_id, rejection_reason)
+        super_admin_id = _get_super_admin_id(user)
+        reject_renewal(db, registration_id, rejection_reason, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
     return _redirect("/super-admin")
@@ -1726,9 +1729,10 @@ def reject_transfer_route(
     rejection_reason: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _require_super_admin(request, db)
+    user = _require_super_admin(request, db)
     try:
-        reject_transfer_registration(db, registration_id, rejection_reason)
+        super_admin_id = _get_super_admin_id(user)
+        reject_transfer_registration(db, registration_id, rejection_reason, super_admin_id)
     except RegistrationError as exc:
         return _render(request, "super_admin/action_result.html", {"error": str(exc)})
     return _redirect("/super-admin")

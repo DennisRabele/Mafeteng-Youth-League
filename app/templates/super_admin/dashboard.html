@@ -75,7 +75,7 @@
               <th>Phone</th>
               <th>Email</th>
               <th>Status</th>
-              <th>Approved By</th>
+              <th>Attended By</th>
               <th>Decision</th>
             </tr>
           </thead>
@@ -148,7 +148,7 @@
               <th>Training Ground</th>
               <th>Home Ground</th>
               <th>Status</th>
-              <th>Approved By</th>
+              <th>Attended By</th>
               <th>Decision</th>
             </tr>
           </thead>
@@ -247,7 +247,7 @@
               <th>Parent</th>
               <th>Documents</th>
               <th>Status</th>
-              <th>Approved By</th>
+              <th>Attended By</th>
               <th>Decision</th>
             </tr>
           </thead>
@@ -270,15 +270,10 @@
               <td>{% if player.parent %}{{ player.parent.name }}{% endif %}</td>
               <td>
                 <div class="doc-list">
-                  {% if player.agreement_form_path %}
-                    <a href="{{ player.agreement_form_path }}" target="_blank">Parent/Guardian Consent Form</a>
-                  {% endif %}
                   {% for document in player.documents %}
                     <a href="{{ document.file_path }}" target="_blank">{{ document.document_type }}</a>
                   {% else %}
-                    {% if not player.agreement_form_path %}
-                      <span class="no-image">No docs</span>
-                    {% endif %}
+                    <span class="no-image">No docs</span>
                   {% endfor %}
                 </div>
               </td>
@@ -334,7 +329,7 @@
               <th>Documents</th>
               <th>Status</th>
               <th>Submitted By</th>
-              <th>Approved By</th>
+              <th>Attended By</th>
               <th>Decision</th>
             </tr>
           </thead>
@@ -413,7 +408,7 @@
               <th>Documents</th>
               <th>Status</th>
               <th>Requested By</th>
-              <th>Approved By</th>
+              <th>Attended By</th>
               <th>Decision</th>
             </tr>
           </thead>

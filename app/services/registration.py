@@ -969,7 +969,12 @@ def approve_team(
     return team
 
 
-def reject_team(db: Session, team_id: int, rejection_reason: str) -> Team:
+def reject_team(
+    db: Session,
+    team_id: int,
+    rejection_reason: str,
+    rejected_by_super_admin_id: int | None = None,
+) -> Team:
     team = db.get(Team, team_id)
     if not team:
         raise RegistrationError("Team was not found.")
@@ -985,6 +990,7 @@ def reject_team(db: Session, team_id: int, rejection_reason: str) -> Team:
 
     team.status = ApprovalStatus.REJECTED.value
     team.rejection_reason = rejection_reason.strip()
+    team.approved_by_super_admin_id = rejected_by_super_admin_id
     db.commit()
     db.refresh(team)
     try:
@@ -1503,7 +1509,12 @@ def approve_player(
     return player
 
 
-def reject_player(db: Session, player_id: int, rejection_reason: str) -> Player:
+def reject_player(
+    db: Session,
+    player_id: int,
+    rejection_reason: str,
+    rejected_by_super_admin_id: int | None = None,
+) -> Player:
     player = db.get(Player, player_id)
     if not player:
         raise RegistrationError("Player was not found.")
@@ -1519,6 +1530,7 @@ def reject_player(db: Session, player_id: int, rejection_reason: str) -> Player:
 
     player.status = ApprovalStatus.REJECTED.value
     player.rejection_reason = rejection_reason.strip()
+    player.approved_by_super_admin_id = rejected_by_super_admin_id
     db.commit()
     db.refresh(player)
     try:
@@ -1576,7 +1588,12 @@ def approve_renewal(db: Session, registration_id: int, approved_by_super_admin_i
     return request
 
 
-def reject_renewal(db: Session, registration_id: int, rejection_reason: str) -> PlayerRegistrationRequest:
+def reject_renewal(
+    db: Session,
+    registration_id: int,
+    rejection_reason: str,
+    rejected_by_super_admin_id: int | None = None,
+) -> PlayerRegistrationRequest:
     """Reject a player renewal registration."""
     request = db.get(PlayerRegistrationRequest, registration_id)
     if not request:
@@ -1595,6 +1612,8 @@ def reject_renewal(db: Session, registration_id: int, rejection_reason: str) -> 
     
     request.status = ApprovalStatus.REJECTED.value
     request.rejection_reason = rejection_reason.strip()
+    request.approved_by_super_admin_id = rejected_by_super_admin_id
+    request.player.approved_by_super_admin_id = rejected_by_super_admin_id
     db.commit()
     db.refresh(request)
     try:
@@ -1679,6 +1698,7 @@ def reject_transfer_registration(
     db: Session,
     registration_id: int,
     rejection_reason: str,
+    rejected_by_super_admin_id: int | None = None,
 ) -> PlayerRegistrationRequest:
     """Reject a completed transfer registration and keep it visible to the new team."""
     request = db.get(PlayerRegistrationRequest, registration_id)
@@ -1695,8 +1715,10 @@ def reject_transfer_registration(
 
     request.status = ApprovalStatus.REJECTED.value
     request.rejection_reason = rejection_reason.strip()
+    request.approved_by_super_admin_id = rejected_by_super_admin_id
     request.player.status = ApprovalStatus.REJECTED.value
     request.player.rejection_reason = rejection_reason.strip()
+    request.player.approved_by_super_admin_id = rejected_by_super_admin_id
 
     db.commit()
     db.refresh(request)
@@ -1751,7 +1773,12 @@ def approve_transfer(db: Session, transfer_id: int, approved_by_super_admin_id: 
     return transfer
 
 
-def reject_transfer(db: Session, transfer_id: int, rejection_reason: str) -> PlayerTransferRequest:
+def reject_transfer(
+    db: Session,
+    transfer_id: int,
+    rejection_reason: str,
+    rejected_by_super_admin_id: int | None = None,
+) -> PlayerTransferRequest:
     """Reject a player transfer request."""
     transfer = db.get(PlayerTransferRequest, transfer_id)
     if not transfer:
@@ -1768,6 +1795,7 @@ def reject_transfer(db: Session, transfer_id: int, rejection_reason: str) -> Pla
     
     transfer.status = ApprovalStatus.REJECTED.value
     transfer.rejection_reason = rejection_reason.strip()
+    transfer.approved_by_super_admin_id = rejected_by_super_admin_id
     db.commit()
     db.refresh(transfer)
     try:
