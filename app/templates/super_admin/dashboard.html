@@ -244,7 +244,6 @@
               <th>Gender</th>
               <th>Age</th>
               <th>Age Group</th>
-              <th>Parent</th>
               <th>Documents</th>
               <th>Status</th>
               <th>Attended By</th>
@@ -267,7 +266,6 @@
               <td>{{ player.gender }}</td>
               <td>{{ player.calculated_age if player.calculated_age is not none else '-' }}</td>
               <td>{{ player.age_group }}</td>
-              <td>{% if player.parent %}{{ player.parent.name }}{% endif %}</td>
               <td>
                 <div class="doc-list">
                   {% for document in player.documents %}
@@ -294,7 +292,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="12" class="empty">No player registrations.</td></tr>
+            <tr><td colspan="11" class="empty">No player registrations.</td></tr>
             {% endfor %}
           </tbody>
         </table>
